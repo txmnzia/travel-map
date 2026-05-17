@@ -105,10 +105,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const mapReadyRef = useRef(false);
     const visibleRef = useRef(visible);
     const addWaypointRef = useRef(addWaypoint);
+    const segmentsRef = useRef(state.segments);
+    const dispatchRef = useRef(dispatch);
+    // Flag to swallow the map click when a route-line click already handled it
+    const routeLineClickedRef = useRef(false);
 
-    // Keep refs current so the stable map click handler sees fresh values
+    // Keep refs current so stable map handlers always see fresh values
     useEffect(() => { visibleRef.current = visible; }, [visible]);
     useEffect(() => { addWaypointRef.current = addWaypoint; }, [addWaypoint]);
+    useEffect(() => { segmentsRef.current = state.segments; }, [state.segments]);
+    useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
 
     useImperativeHandle(ref, () => ({
       getMap: () => mapRef.current,
@@ -164,12 +170,49 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           visibility: 'none',
         } as maplibregl.LayerSpecification);
 
+        // Click on a route line → insert intermediate waypoint
+        map.on('click', 'routes-line', (e) => {
+          if (!visibleRef.current) return;
+          routeLineClickedRef.current = true;
+
+          const segmentId = e.features?.[0]?.properties?.segmentId as string | undefined;
+          if (!segmentId) return;
+
+          const seg = segmentsRef.current.find(s => s.id === segmentId);
+          if (!seg || seg.route.length < 2) return;
+
+          // Snap click to nearest point on the route geometry
+          const clickPt = turf.point([e.lngLat.lng, e.lngLat.lat]);
+          const nearest = turf.nearestPointOnLine(turf.lineString(seg.route), clickPt);
+          const [lng, lat] = nearest.geometry.coordinates;
+
+          const waypoint = {
+            id: `wp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            lng,
+            lat,
+          };
+          dispatchRef.current({ type: 'INSERT_WAYPOINT', waypoint, segmentId });
+        });
+
+        // Change cursor when hovering over a route line
+        map.on('mouseenter', 'routes-line', () => {
+          if (visibleRef.current) map.getCanvas().style.cursor = 'crosshair';
+        });
+        map.on('mouseleave', 'routes-line', () => {
+          map.getCanvas().style.cursor = '';
+        });
+
         mapReadyRef.current = true;
       });
 
-      // Click to add waypoint (edit mode only) — use refs to avoid stale closure
+      // Click on empty map → add new destination waypoint
+      // (guarded by the route-line flag to prevent double-firing)
       map.on('click', (e) => {
         if (!visibleRef.current) return;
+        if (routeLineClickedRef.current) {
+          routeLineClickedRef.current = false;
+          return;
+        }
         addWaypointRef.current(e.lngLat.lng, e.lngLat.lat);
       });
 
@@ -378,7 +421,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
         const features = state.segments
           .filter(s => s.route.length >= 2)
-          .map(s => turf.lineString(s.route));
+          .map(s => turf.lineString(s.route, { segmentId: s.id }));
 
         src.setData(turf.featureCollection(features));
       };

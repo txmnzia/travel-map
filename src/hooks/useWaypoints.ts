@@ -60,6 +60,52 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       return { waypoints, segments };
     }
 
+    case 'INSERT_WAYPOINT': {
+      const seg = state.segments.find(s => s.id === action.segmentId);
+      if (!seg) return state;
+
+      const fromIdx = state.waypoints.findIndex(w => w.id === seg.fromId);
+      const toWp = state.waypoints.find(w => w.id === seg.toId);
+      if (fromIdx === -1 || !toWp) return state;
+
+      const fromWp = state.waypoints[fromIdx];
+      const { waypoint } = action;
+
+      // Insert new waypoint between fromWp and toWp
+      const waypoints = [
+        ...state.waypoints.slice(0, fromIdx + 1),
+        waypoint,
+        ...state.waypoints.slice(fromIdx + 1),
+      ];
+
+      const seg1: Segment = {
+        id: `seg-${Date.now()}-a`,
+        fromId: fromWp.id,
+        toId: waypoint.id,
+        vehicle: seg.vehicle,
+        handles: [],
+        route: computeRoute([fromWp.lng, fromWp.lat], [waypoint.lng, waypoint.lat], seg.vehicle, []),
+      };
+      const seg2: Segment = {
+        id: `seg-${Date.now()}-b`,
+        fromId: waypoint.id,
+        toId: toWp.id,
+        vehicle: seg.vehicle,
+        handles: [],
+        route: computeRoute([waypoint.lng, waypoint.lat], [toWp.lng, toWp.lat], seg.vehicle, []),
+      };
+
+      const segIdx = state.segments.findIndex(s => s.id === action.segmentId);
+      const segments = [
+        ...state.segments.slice(0, segIdx),
+        seg1,
+        seg2,
+        ...state.segments.slice(segIdx + 1),
+      ];
+
+      return { waypoints, segments };
+    }
+
     case 'CLEAR_ALL':
       return EMPTY;
 
