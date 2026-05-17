@@ -13,7 +13,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
     <>
       {/* Backdrop — absorbs all touch/click so the map underneath is blocked */}
       <div
-        className="absolute inset-0 z-30"
+        className="absolute inset-0 z-[60]"
         onClick={onClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -21,9 +21,9 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
 
       {/* Bottom sheet */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-40 bg-navy rounded-t-3xl overflow-hidden pb-safe"
+        className="absolute bottom-0 left-0 right-0 z-[70] bg-navy rounded-t-3xl overflow-hidden pb-safe"
         onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        onTouchMove={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 rounded-full bg-white/20" />

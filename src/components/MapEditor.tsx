@@ -46,7 +46,7 @@ function createWaypointEl(
   isFirst: boolean,
 ): HTMLElement {
   const el = document.createElement('div');
-  el.style.cssText = 'cursor: grab; user-select: none;';
+  el.style.cssText = 'cursor: grab; user-select: none; touch-action: manipulation;';
 
   if (isLast && waypoints.length > 1) {
     el.innerHTML = FLAG_PIN;
@@ -55,9 +55,12 @@ function createWaypointEl(
     return el;
   }
 
-  // Find the outgoing segment vehicle
-  const seg = segments.find(s => s.fromId === waypointId);
-  const vehicle = seg ? getVehicle(seg.vehicle) : null;
+  const outgoingSeg = segments.find(s => s.fromId === waypointId);
+  const incomingSeg = segments.find(s => s.toId === waypointId);
+  const vehicle = outgoingSeg ? getVehicle(outgoingSeg.vehicle) : null;
+
+  // Show vehicle icon only when the outgoing transport differs from the incoming one
+  const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
 
   el.style.width = '42px';
   el.style.height = '42px';
@@ -71,10 +74,13 @@ function createWaypointEl(
   el.style.fontSize = '18px';
   el.style.color = 'white';
 
-  if (vehicle) {
+  if (vehicle && vehicleChanged) {
     el.textContent = vehicle.emoji;
+  } else if (vehicle) {
+    // Same transport as before — show a neutral dot
+    el.style.fontSize = '10px';
+    el.textContent = '●';
   } else {
-    // Last waypoint with no outgoing segment (single waypoint)
     el.textContent = '📍';
   }
 
@@ -359,9 +365,10 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       const seg = segments.find(s => s.fromId === waypointId);
 
       // ── Double-tap: remove waypoint ──────────────────────────────────────
+      // Use touchend for reliable double-tap on mobile (no 300 ms click delay)
       let lastTap = 0;
-      el.addEventListener('click', (e) => {
-        e.stopPropagation(); // never propagate taps on markers to the map
+      const fireTap = (e: Event) => {
+        e.stopPropagation();
         const now = Date.now();
         if (now - lastTap < 350) {
           el.dispatchEvent(new CustomEvent('remove-waypoint', {
@@ -372,7 +379,9 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         } else {
           lastTap = now;
         }
-      });
+      };
+      el.addEventListener('touchend', fireTap, { passive: false });
+      el.addEventListener('click', (e) => e.stopPropagation());
 
       // ── Long-press (600 ms): open vehicle selector ───────────────────────
       if (!seg) return; // last waypoint has no outgoing segment
