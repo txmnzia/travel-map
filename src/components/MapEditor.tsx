@@ -161,13 +161,12 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           id: 'trail-line',
           type: 'line',
           source: 'trail',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
           paint: {
             'line-color': '#ef4444',
             'line-width': 3,
             'line-dasharray': [2, 3],
           },
-          visibility: 'none',
         } as maplibregl.LayerSpecification);
 
         // Click on a route line → insert intermediate waypoint
@@ -233,16 +232,24 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         mapReadyRef.current = true;
         // Re-add sources/layers after style change
         if (!map.getSource('routes')) {
+          const segments = segmentsRef.current;
+          const features = segments
+            .filter(s => s.route.length >= 2)
+            .map(s => turf.lineString(s.route, { segmentId: s.id }));
+
           map.addSource('routes', {
             type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
+            data: turf.featureCollection(features),
           });
           map.addLayer({
             id: 'routes-line',
             type: 'line',
             source: 'routes',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#e87722', 'line-width': 4 },
+            paint: {
+              'line-color': '#e87722',
+              'line-width': ['interpolate', ['linear'], ['zoom'], 2, 3, 8, 5],
+            },
           });
         }
         if (!map.getSource('trail')) {
@@ -254,9 +261,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
             id: 'trail-line',
             type: 'line',
             source: 'trail',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
             paint: { 'line-color': '#ef4444', 'line-width': 3, 'line-dasharray': [2, 3] },
-            visibility: 'none',
           } as maplibregl.LayerSpecification);
         }
       });
