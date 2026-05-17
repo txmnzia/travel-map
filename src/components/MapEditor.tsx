@@ -151,6 +151,14 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
             'line-width': ['interpolate', ['linear'], ['zoom'], 2, 3, 8, 5],
           },
         });
+        // Wide invisible tap-target so the route line is easy to tap on mobile
+        map.addLayer({
+          id: 'routes-tap',
+          type: 'line',
+          source: 'routes',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': 'transparent', 'line-width': 28 },
+        });
 
         // Trail source + layer (for animation mode)
         map.addSource('trail', {
@@ -169,8 +177,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           },
         } as maplibregl.LayerSpecification);
 
-        // Click on a route line → insert intermediate waypoint
-        map.on('click', 'routes-line', (e) => {
+        // Tap/click on the route (wide invisible tap layer) → insert intermediate waypoint
+        map.on('click', 'routes-tap', (e) => {
           if (!visibleRef.current) return;
           routeLineClickedRef.current = true;
 
@@ -193,11 +201,11 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           dispatchRef.current({ type: 'INSERT_WAYPOINT', waypoint, segmentId });
         });
 
-        // Change cursor when hovering over a route line
-        map.on('mouseenter', 'routes-line', () => {
+        // Change cursor when hovering over a route line (desktop)
+        map.on('mouseenter', 'routes-tap', () => {
           if (visibleRef.current) map.getCanvas().style.cursor = 'crosshair';
         });
-        map.on('mouseleave', 'routes-line', () => {
+        map.on('mouseleave', 'routes-tap', () => {
           map.getCanvas().style.cursor = '';
         });
 
@@ -250,6 +258,13 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
               'line-color': '#e87722',
               'line-width': ['interpolate', ['linear'], ['zoom'], 2, 3, 8, 5],
             },
+          });
+          map.addLayer({
+            id: 'routes-tap',
+            type: 'line',
+            source: 'routes',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': 'transparent', 'line-width': 28 },
           });
         }
         if (!map.getSource('trail')) {
@@ -363,8 +378,13 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       if (!seg) return; // last waypoint has no outgoing segment
 
       let pressTimer: ReturnType<typeof setTimeout> | null = null;
+      let pressStartX = 0;
+      let pressStartY = 0;
 
-      const onPressStart = () => {
+      const onPressStart = (e: TouchEvent | MouseEvent) => {
+        const touch = (e as TouchEvent).touches?.[0];
+        pressStartX = touch ? touch.clientX : (e as MouseEvent).clientX;
+        pressStartY = touch ? touch.clientY : (e as MouseEvent).clientY;
         el.classList.add('waypoint-pressing');
         pressTimer = setTimeout(() => {
           pressTimer = null;
@@ -377,17 +397,29 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }, 600);
       };
 
+      const onPressMove = (e: TouchEvent) => {
+        // Only cancel if finger moved more than 10px (ignore jitter)
+        const touch = e.touches[0];
+        if (!touch) return;
+        const dx = touch.clientX - pressStartX;
+        const dy = touch.clientY - pressStartY;
+        if (Math.sqrt(dx * dx + dy * dy) > 10) {
+          if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+          el.classList.remove('waypoint-pressing');
+        }
+      };
+
       const onPressEnd = () => {
         if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
         el.classList.remove('waypoint-pressing');
       };
 
-      // Touch (passive so drag still works; touchmove cancels the timer)
-      el.addEventListener('touchstart', onPressStart, { passive: true });
+      // Touch (passive so drag still works)
+      el.addEventListener('touchstart', onPressStart as EventListener, { passive: true });
       el.addEventListener('touchend', onPressEnd);
-      el.addEventListener('touchmove', onPressEnd, { passive: true });
+      el.addEventListener('touchmove', onPressMove as EventListener, { passive: true });
       // Mouse fallback (desktop)
-      el.addEventListener('mousedown', onPressStart);
+      el.addEventListener('mousedown', onPressStart as EventListener);
       el.addEventListener('mouseup', onPressEnd);
       el.addEventListener('mouseleave', onPressEnd);
       // Suppress browser context-menu on long-press
