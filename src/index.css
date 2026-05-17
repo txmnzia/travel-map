@@ -34,6 +34,17 @@
   }
 }
 
+/* Long-press ring animation on waypoint markers */
+@keyframes lp-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(245,166,35,0.85), 0 2px 8px rgba(0,0,0,0.35); transform: scale(1); }
+  60%  { box-shadow: 0 0 0 12px rgba(245,166,35,0.15), 0 2px 8px rgba(0,0,0,0.35); transform: scale(1.18); }
+  100% { box-shadow: 0 0 0 16px rgba(245,166,35,0),   0 2px 8px rgba(0,0,0,0.35); transform: scale(1.12); }
+}
+.waypoint-pressing {
+  animation: lp-ring 0.6s ease-out forwards;
+  cursor: grab;
+}
+
 /* MapLibre overrides */
 .maplibregl-canvas {
   outline: none;
