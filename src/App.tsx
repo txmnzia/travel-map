@@ -124,7 +124,7 @@ export default function App() {
           <Toolbar
             canUndo={canUndo}
             canRedo={canRedo}
-            hasWaypoints={state.waypoints.length >= 2}
+            waypointCount={state.waypoints.length}
             onUndo={() => dispatch({ type: 'UNDO' })}
             onRedo={() => dispatch({ type: 'REDO' })}
             onPlay={enterPreview}
