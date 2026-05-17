@@ -54,7 +54,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   const fullRoute = buildFullRoute(state);
 
-  // Switch to globe mode on mount
+  // Set up animation view on mount
   useEffect(() => {
     if (!map) return;
 
@@ -63,31 +63,17 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       map.setLayoutProperty('trail-line', 'visibility', 'visible');
     }
 
-    // Switch to globe projection
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (map as any).setProjection({ name: 'globe' });
-
-    // Add atmosphere / space fog
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (map as any).setFog({
-      color: 'rgb(186, 210, 235)',
-      'high-color': 'rgb(36, 92, 223)',
-      'horizon-blend': 0.02,
-      'space-color': 'rgb(11, 11, 25)',
-      'star-intensity': 0.6,
-    });
-
-    // Zoom out to see globe
-    if (fullRoute.length > 0) {
-      map.flyTo({
-        center: fullRoute[Math.floor(fullRoute.length / 2)],
-        zoom: 2.5,
-        pitch: 20,
-        duration: 1200,
-      });
+    // Fit map to show the full route, then unlock play once tiles are loaded
+    if (fullRoute.length >= 2) {
+      const coords = fullRoute;
+      const bounds = coords.reduce(
+        (b, c) => b.extend(c as [number, number]),
+        new maplibregl.LngLatBounds(coords[0], coords[0]),
+      );
+      map.fitBounds(bounds, { padding: 80, maxZoom: 6, duration: 800 });
     }
 
-    // Create vehicle marker
+    // Create vehicle marker at start of route
     const el = document.createElement('div');
     el.style.cssText = 'font-size: 36px; line-height: 1; pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));';
     el.textContent = vehicleAtProgress(state, 0);
@@ -98,14 +84,14 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     }
     vehicleMarkerRef.current = marker;
 
-    setTimeout(() => setIsGlobeReady(true), 1400);
+    // Unlock play when map tiles finish loading (fallback: 2 s)
+    let unlocked = false;
+    const unlock = () => { if (!unlocked) { unlocked = true; setIsGlobeReady(true); } };
+    map.once('idle', unlock);
+    const fallback = setTimeout(unlock, 2000);
 
     return () => {
-      // Restore flat map
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (map as any).setProjection({ name: 'mercator' });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (map as any).setFog(null);
+      clearTimeout(fallback);
       if (map.getLayer('trail-line')) {
         map.setLayoutProperty('trail-line', 'visibility', 'none');
       }
