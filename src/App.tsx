@@ -64,7 +64,7 @@ export default function App() {
   const map = mapEditorRef.current?.getMap() ?? null;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-navy">
+    <div className="relative w-screen overflow-hidden bg-navy" style={{ height: '100dvh' }}>
       {/* Header */}
       {mode === 'edit' && (
         <div className="absolute top-0 left-0 right-0 z-10 bg-navy pt-safe">
@@ -75,9 +75,12 @@ export default function App() {
             >
               ☰
             </button>
-            <h1 className="text-white font-black text-xl tracking-widest uppercase">
-              Draw a Route
-            </h1>
+            <div className="text-center">
+              <h1 className="text-white font-black text-xl tracking-widest uppercase">
+                Draw a Route
+              </h1>
+              <p className="text-white/30 text-[10px] tracking-wider">v20260517-3</p>
+            </div>
             <div className="w-10" />
           </div>
         </div>
