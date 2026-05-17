@@ -333,18 +333,59 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       el: HTMLElement,
       waypointId: string,
       segments: Segment[],
-      isLast: boolean,
+      _isLast: boolean,
     ) {
-      if (isLast) return; // no tap on last
       const seg = segments.find(s => s.fromId === waypointId);
-      if (!seg) return;
+
+      // ── Double-tap: remove waypoint ──────────────────────────────────────
+      let lastTap = 0;
       el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        el.dispatchEvent(new CustomEvent('open-vehicle-selector', {
-          bubbles: true,
-          detail: { segmentId: seg.id, vehicle: seg.vehicle },
-        }));
+        e.stopPropagation(); // never propagate taps on markers to the map
+        const now = Date.now();
+        if (now - lastTap < 350) {
+          el.dispatchEvent(new CustomEvent('remove-waypoint', {
+            bubbles: true,
+            detail: { waypointId },
+          }));
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
       });
+
+      // ── Long-press (600 ms): open vehicle selector ───────────────────────
+      if (!seg) return; // last waypoint has no outgoing segment
+
+      let pressTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const onPressStart = () => {
+        el.classList.add('waypoint-pressing');
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          el.classList.remove('waypoint-pressing');
+          navigator.vibrate?.(40);
+          el.dispatchEvent(new CustomEvent('open-vehicle-selector', {
+            bubbles: true,
+            detail: { segmentId: seg.id, vehicle: seg.vehicle },
+          }));
+        }, 600);
+      };
+
+      const onPressEnd = () => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        el.classList.remove('waypoint-pressing');
+      };
+
+      // Touch (passive so drag still works; touchmove cancels the timer)
+      el.addEventListener('touchstart', onPressStart, { passive: true });
+      el.addEventListener('touchend', onPressEnd);
+      el.addEventListener('touchmove', onPressEnd, { passive: true });
+      // Mouse fallback (desktop)
+      el.addEventListener('mousedown', onPressStart);
+      el.addEventListener('mouseup', onPressEnd);
+      el.addEventListener('mouseleave', onPressEnd);
+      // Suppress browser context-menu on long-press
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     // Sync segment handle markers

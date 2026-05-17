@@ -32,6 +32,7 @@ export type TravelAction =
   | { type: 'SET_VEHICLE'; segmentId: string; vehicle: VehicleType }
   | { type: 'ADD_HANDLE'; segmentId: string; handle: [number, number] }
   | { type: 'MOVE_HANDLE'; segmentId: string; index: number; handle: [number, number] }
+  | { type: 'REMOVE_WAYPOINT'; id: string }
   | { type: 'INSERT_WAYPOINT'; waypoint: Waypoint; segmentId: string }
   | { type: 'UNDO' }
   | { type: 'REDO' };
