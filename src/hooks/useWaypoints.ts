@@ -60,6 +60,46 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       return { waypoints, segments };
     }
 
+    case 'REMOVE_WAYPOINT': {
+      const idx = state.waypoints.findIndex(w => w.id === action.id);
+      if (idx === -1) return state;
+
+      const incoming = state.segments.find(s => s.toId === action.id);
+      const outgoing = state.segments.find(s => s.fromId === action.id);
+
+      const waypoints = state.waypoints.filter(w => w.id !== action.id);
+      let segments = state.segments.filter(
+        s => s.fromId !== action.id && s.toId !== action.id,
+      );
+
+      // Reconnect the two neighbours if this was a middle point
+      if (incoming && outgoing) {
+        const fromWp = state.waypoints.find(w => w.id === incoming.fromId)!;
+        const toWp = state.waypoints.find(w => w.id === outgoing.toId)!;
+        const newSeg: Segment = {
+          id: `seg-${Date.now()}`,
+          fromId: fromWp.id,
+          toId: toWp.id,
+          vehicle: outgoing.vehicle,
+          handles: [],
+          route: computeRoute(
+            [fromWp.lng, fromWp.lat],
+            [toWp.lng, toWp.lat],
+            outgoing.vehicle,
+            [],
+          ),
+        };
+        const incomingIdx = state.segments.findIndex(s => s.id === incoming.id);
+        segments = [
+          ...segments.slice(0, incomingIdx),
+          newSeg,
+          ...segments.slice(incomingIdx),
+        ];
+      }
+
+      return { waypoints, segments };
+    }
+
     case 'INSERT_WAYPOINT': {
       const seg = state.segments.find(s => s.id === action.segmentId);
       if (!seg) return state;
