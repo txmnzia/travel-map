@@ -112,8 +112,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const segmentsRef = useRef(state.segments);
     const waypointsRef = useRef(state.waypoints);
     const dispatchRef = useRef(dispatch);
-    // Flag to swallow the map click when a route-line click already handled it
-    const routeLineClickedRef = useRef(false);
 
     // Keep refs current so stable map handlers always see fresh values
     useEffect(() => { visibleRef.current = visible; }, [visible]);
@@ -186,7 +184,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         // Tap/click on the route (wide invisible tap layer) → insert intermediate waypoint
         map.on('click', 'routes-tap', (e) => {
           if (!visibleRef.current) return;
-          routeLineClickedRef.current = true;
 
           const segmentId = e.features?.[0]?.properties?.segmentId as string | undefined;
           if (!segmentId) return;
@@ -218,14 +215,13 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         mapReadyRef.current = true;
       });
 
-      // Click on empty map → add new destination waypoint
-      // (guarded by the route-line flag to prevent double-firing)
+      // Click on empty map → add new destination waypoint.
+      // Use queryRenderedFeatures to guard against clicks on route segments —
+      // this is reliable regardless of MapLibre's layer vs. map event order.
       map.on('click', (e) => {
         if (!visibleRef.current) return;
-        if (routeLineClickedRef.current) {
-          routeLineClickedRef.current = false;
-          return;
-        }
+        const onRoute = map.queryRenderedFeatures(e.point, { layers: ['routes-tap'] });
+        if (onRoute.length > 0) return;
         addWaypointRef.current(e.lngLat.lng, e.lngLat.lat);
       });
 

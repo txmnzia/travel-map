@@ -79,7 +79,7 @@ export default function App() {
               <h1 className="text-white font-black text-xl tracking-widest uppercase">
                 Draw a Route
               </h1>
-              <p className="text-white/30 text-[10px] tracking-wider">v20260517-3</p>
+              <p className="text-white/30 text-[10px] tracking-wider">v20260518-1</p>
             </div>
             <div className="w-10" />
           </div>
