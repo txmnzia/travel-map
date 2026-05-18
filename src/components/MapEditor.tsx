@@ -59,8 +59,16 @@ function createWaypointEl(
   const incomingSeg = segments.find(s => s.toId === waypointId);
   const vehicle = outgoingSeg ? getVehicle(outgoingSeg.vehicle) : null;
 
-  // Show vehicle icon only when the outgoing transport differs from the incoming one
+  // Hide the visual marker when transport hasn't changed — just a transparent
+  // touch target so the point is still draggable / double-tappable
   const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
+
+  if (vehicle && !vehicleChanged) {
+    el.style.width = '32px';
+    el.style.height = '32px';
+    // invisible — only serves as drag/tap target
+    return el;
+  }
 
   el.style.width = '42px';
   el.style.height = '42px';
@@ -73,16 +81,7 @@ function createWaypointEl(
   el.style.justifyContent = 'center';
   el.style.fontSize = '18px';
   el.style.color = 'white';
-
-  if (vehicle && vehicleChanged) {
-    el.textContent = vehicle.emoji;
-  } else if (vehicle) {
-    // Same transport as before — show a neutral dot
-    el.style.fontSize = '10px';
-    el.textContent = '●';
-  } else {
-    el.textContent = '📍';
-  }
+  el.textContent = vehicle ? vehicle.emoji : '📍';
 
   return el;
 }
