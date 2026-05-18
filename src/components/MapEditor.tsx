@@ -415,6 +415,10 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       };
       el.addEventListener('touchend', fireTap, { passive: false });
       el.addEventListener('click', (e) => e.stopPropagation());
+      el.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        el.dispatchEvent(new CustomEvent('remove-waypoint', { bubbles: true, detail: { waypointId } }));
+      });
 
       // ── Long-press (600 ms): open vehicle selector ───────────────────────
       if (!seg) return; // last waypoint has no outgoing segment
