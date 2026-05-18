@@ -59,16 +59,8 @@ function createWaypointEl(
   const incomingSeg = segments.find(s => s.toId === waypointId);
   const vehicle = outgoingSeg ? getVehicle(outgoingSeg.vehicle) : null;
 
-  // Hide the visual marker when transport hasn't changed — just a transparent
-  // touch target so the point is still draggable / double-tappable
+  // Show the vehicle emoji only when transport changes (or on the very first waypoint)
   const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
-
-  if (vehicle && !vehicleChanged) {
-    el.style.width = '32px';
-    el.style.height = '32px';
-    // invisible — only serves as drag/tap target
-    return el;
-  }
 
   el.style.width = '42px';
   el.style.height = '42px';
@@ -81,7 +73,13 @@ function createWaypointEl(
   el.style.justifyContent = 'center';
   el.style.fontSize = '18px';
   el.style.color = 'white';
-  el.textContent = vehicle ? vehicle.emoji : '📍';
+
+  if (!vehicle) {
+    el.textContent = '📍'; // solo waypoint, no segment yet
+  } else if (vehicleChanged) {
+    el.textContent = vehicle.emoji; // transport changes here — show icon
+  }
+  // else: same transport — leave circle empty (plain amber dot)
 
   return el;
 }
