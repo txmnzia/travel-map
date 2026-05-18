@@ -9,7 +9,7 @@ import maplibregl from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { TravelState, TravelAction, Segment, Waypoint } from '../types';
 import { getVehicle } from '../utils/vehicles';
-import { routeMidpoint } from '../utils/routing';
+import { computeRoute, routeMidpoint } from '../utils/routing';
 import { getStyleUrl } from '../utils/mapStyles';
 import type { MapStyleId } from '../types';
 
@@ -109,6 +109,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const visibleRef = useRef(visible);
     const addWaypointRef = useRef(addWaypoint);
     const segmentsRef = useRef(state.segments);
+    const waypointsRef = useRef(state.waypoints);
     const dispatchRef = useRef(dispatch);
     // Flag to swallow the map click when a route-line click already handled it
     const routeLineClickedRef = useRef(false);
@@ -117,6 +118,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => { visibleRef.current = visible; }, [visible]);
     useEffect(() => { addWaypointRef.current = addWaypoint; }, [addWaypoint]);
     useEffect(() => { segmentsRef.current = state.segments; }, [state.segments]);
+    useEffect(() => { waypointsRef.current = state.waypoints; }, [state.waypoints]);
     useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
 
     useImperativeHandle(ref, () => ({
@@ -303,26 +305,58 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
       });
 
+      // Helper: update route GeoJSON in real-time while a waypoint is being dragged
+      const makeLiveDragHandler = (marker: maplibregl.Marker, waypointId: string) => () => {
+        const ll = marker.getLngLat();
+        const segs = segmentsRef.current;
+        const wps = waypointsRef.current;
+
+        const features = segs
+          .map(s => {
+            let from: [number, number];
+            let to: [number, number];
+
+            if (s.fromId === waypointId) {
+              from = [ll.lng, ll.lat];
+              const toWp = wps.find(w => w.id === s.toId);
+              if (!toWp) return null;
+              to = [toWp.lng, toWp.lat];
+            } else if (s.toId === waypointId) {
+              const fromWp = wps.find(w => w.id === s.fromId);
+              if (!fromWp) return null;
+              from = [fromWp.lng, fromWp.lat];
+              to = [ll.lng, ll.lat];
+            } else {
+              if (s.route.length < 2) return null;
+              return turf.lineString(s.route, { segmentId: s.id });
+            }
+
+            const route = computeRoute(from, to, s.vehicle, s.handles);
+            return turf.lineString(route, { segmentId: s.id });
+          })
+          .filter((f): f is NonNullable<typeof f> => f !== null);
+
+        const src = mapRef.current?.getSource('routes') as maplibregl.GeoJSONSource | undefined;
+        src?.setData(turf.featureCollection(features) as GeoJSON.FeatureCollection);
+      };
+
       // Add or update markers
       waypoints.forEach((wp, idx) => {
         const isLast = idx === waypoints.length - 1;
         const isFirst = idx === 0;
 
         if (existing.has(wp.id)) {
-          // Update position
-          existing.get(wp.id)!.setLngLat([wp.lng, wp.lat]);
-          // Refresh element (vehicle icon may have changed)
+          // Refresh element (vehicle icon may have changed) by recreating marker
+          existing.get(wp.id)!.remove();
           const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
           setupWaypointEl(el, wp.id, segments, isLast);
-          const marker = existing.get(wp.id)!;
-          // Replace element by recreating marker
-          marker.remove();
           const newMarker = new maplibregl.Marker({ element: el, draggable: true, anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center' })
             .setLngLat([wp.lng, wp.lat])
             .addTo(map);
+          newMarker.on('drag', makeLiveDragHandler(newMarker, wp.id));
           newMarker.on('dragend', () => {
             const ll = newMarker.getLngLat();
-            dispatch({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
+            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
           });
           existing.set(wp.id, newMarker);
         } else {
@@ -336,9 +370,10 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
             .setLngLat([wp.lng, wp.lat])
             .addTo(map);
 
+          marker.on('drag', makeLiveDragHandler(marker, wp.id));
           marker.on('dragend', () => {
             const ll = marker.getLngLat();
-            dispatch({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
+            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
           });
 
           existing.set(wp.id, marker);
