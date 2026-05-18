@@ -394,9 +394,31 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       const seg = segments.find(s => s.fromId === waypointId);
 
       // ── Double-tap: remove waypoint ──────────────────────────────────────
-      // Use touchend for reliable double-tap on mobile (no 300 ms click delay)
+      // Use touchend for reliable double-tap on mobile (no 300 ms click delay).
+      // Guard against drag-end being mistaken for a tap: if the touch moved
+      // more than 10 px it was a drag and we skip the double-tap counter.
       let lastTap = 0;
+      let tapStartX = 0;
+      let tapStartY = 0;
+      let touchMoved = false;
+
+      el.addEventListener('touchstart', (e) => {
+        const t = (e as TouchEvent).touches[0];
+        if (t) { tapStartX = t.clientX; tapStartY = t.clientY; }
+        touchMoved = false;
+      }, { passive: true });
+
+      el.addEventListener('touchmove', (e) => {
+        const t = (e as TouchEvent).touches[0];
+        if (t) {
+          const dx = t.clientX - tapStartX;
+          const dy = t.clientY - tapStartY;
+          if (Math.sqrt(dx * dx + dy * dy) > 10) touchMoved = true;
+        }
+      }, { passive: true });
+
       const fireTap = (e: Event) => {
+        if (touchMoved) { touchMoved = false; return; } // drag-end — not a tap
         e.stopPropagation();
         const now = Date.now();
         if (now - lastTap < 350) {
