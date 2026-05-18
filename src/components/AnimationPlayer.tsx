@@ -44,7 +44,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [duration, setDuration] = useState(10); // seconds
   const [cameraFollow, setCameraFollow] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
-  const [isGlobeReady, setIsGlobeReady] = useState(false);
 
   const vehicleMarkerRef = useRef<maplibregl.Marker | null>(null);
   const animFrameRef = useRef<number>(0);
@@ -63,7 +62,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       map.setLayoutProperty('trail-line', 'visibility', 'visible');
     }
 
-    // Fit map to show the full route, then unlock play once tiles are loaded
+    // Fit map to show the full route
     if (fullRoute.length >= 2) {
       const coords = fullRoute;
       const bounds = coords.reduce(
@@ -84,14 +83,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     }
     vehicleMarkerRef.current = marker;
 
-    // Unlock play when map tiles finish loading (fallback: 2 s)
-    let unlocked = false;
-    const unlock = () => { if (!unlocked) { unlocked = true; setIsGlobeReady(true); } };
-    map.once('idle', unlock);
-    const fallback = setTimeout(unlock, 2000);
-
     return () => {
-      clearTimeout(fallback);
       if (map.getLayer('trail-line')) {
         map.setLayoutProperty('trail-line', 'visibility', 'none');
       }
@@ -178,13 +170,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     });
   }, [animate, map]);
 
-  // Restart when play changes
-  useEffect(() => {
-    if (isPlaying) {
-      // already started via play()
-    }
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [isPlaying]);
+  // NOTE: no useEffect on isPlaying — the effect was cancelling the animation
+  // frame immediately after play() started it (cleanup fires on every change)
 
   const downloadVideo = useCallback(async () => {
     if (!map || fullRoute.length < 2) return;
@@ -280,10 +267,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           {/* Play / Stop */}
           <button
             onClick={isPlaying ? stopAnimation : play}
-            disabled={!hasRoute || !isGlobeReady}
+            disabled={!hasRoute}
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
-              hasRoute && isGlobeReady
+              hasRoute
                 ? 'bg-amber text-navy'
                 : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
@@ -294,10 +281,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           {/* Download */}
           <button
             onClick={downloadVideo}
-            disabled={!hasRoute || isRecording || !isGlobeReady}
+            disabled={!hasRoute || isRecording}
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
-              hasRoute && !isRecording && isGlobeReady
+              hasRoute && !isRecording
                 ? 'bg-blue-500 text-white'
                 : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
