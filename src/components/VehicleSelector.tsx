@@ -13,7 +13,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
     <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 z-[60]"
+        className="absolute inset-0 z-30"
         onClick={onClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -21,9 +21,9 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
 
       {/* Bottom sheet */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-[70] bg-navy rounded-t-3xl overflow-hidden pb-safe"
+        className="absolute bottom-0 left-0 right-0 z-40 bg-navy rounded-t-3xl pb-safe"
         onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
+        onTouchMove={(e) => { e.stopPropagation(); e.preventDefault(); }}
       >
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 rounded-full bg-white/20" />
@@ -34,13 +34,11 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
         </h2>
 
         <div className="overflow-y-auto max-h-[60vh] px-4 pb-6">
-          {VEHICLE_CATEGORIES.map(category => {
-            const vehicles = VEHICLES.filter(v => v.category === category);
+          {VEHICLE_CATEGORIES.map(cat => {
+            const vehicles = VEHICLES.filter(v => v.category === cat);
             return (
-              <div key={category} className="mb-4">
-                <p className="text-white/40 text-xs font-bold tracking-widest uppercase mb-2 px-1">
-                  {category}
-                </p>
+              <div key={cat} className="mb-4">
+                <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">{cat}</p>
                 <div className="grid grid-cols-4 gap-2">
                   {vehicles.map(v => {
                     const selected = v.type === current;
@@ -59,9 +57,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
                         ].join(' ')}
                       >
                         <span className="text-2xl leading-none">{v.emoji}</span>
-                        <span className="text-[10px] font-semibold leading-tight text-center">
-                          {v.label}
-                        </span>
+                        <span className="text-xs font-semibold leading-tight text-center">{v.label}</span>
                       </button>
                     );
                   })}
