@@ -72,6 +72,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const animZoomRef = useRef<number>(10);
   const totalKmRef = useRef<number>(0);
   const segmentBreakpointsRef = useRef<number[]>([]);
+  const smoothBearingRef = useRef<number>(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -105,6 +106,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
     // Set perspective camera at route start facing direction of travel
     const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+    smoothBearingRef.current = startBearing;
     map.easeTo({
       center: startPos,
       bearing: startBearing,
@@ -199,10 +201,18 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Chase camera: bearing tracks vehicle direction, pitch stays at 60°
+    // Smooth the camera bearing so sharp turns don't cause violent pivots.
+    // Lerp toward the target bearing each frame, normalising the delta to
+    // [-180, 180] so we always take the short arc around the circle.
+    let delta = bearing - smoothBearingRef.current;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    smoothBearingRef.current += delta * 0.08;
+
+    // Chase camera: smoothed bearing tracks vehicle direction, pitch stays at 60°
     map.easeTo({
       center: position,
-      bearing,
+      bearing: smoothBearingRef.current,
       pitch: 60,
       zoom: animZoomRef.current,
       duration: 80,
@@ -237,6 +247,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
       // Snap camera back to start position before replaying
       const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+      smoothBearingRef.current = startBearing;
       map.easeTo({
         center: startPos,
         bearing: startBearing,
