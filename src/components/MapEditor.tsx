@@ -227,12 +227,15 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         addWaypointRef.current(e.lngLat.lng, e.lngLat.lat);
       });
 
-      // Resize when browser chrome shows/hides (iOS Safari URL bar)
-      const onWindowResize = () => map.resize();
-      window.addEventListener('resize', onWindowResize);
+      // Resize on window resize (orientation change) and visualViewport resize
+      // (iOS Safari URL bar show/hide — window.resize does NOT fire for that)
+      const onResize = () => map.resize();
+      window.addEventListener('resize', onResize);
+      window.visualViewport?.addEventListener('resize', onResize);
 
       return () => {
-        window.removeEventListener('resize', onWindowResize);
+        window.removeEventListener('resize', onResize);
+        window.visualViewport?.removeEventListener('resize', onResize);
         map.remove();
         mapRef.current = null;
         mapReadyRef.current = false;
