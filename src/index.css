@@ -12,17 +12,18 @@
   html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
-  /* position:relative makes #root the containing block for all absolute
-     children. height:100% fills the layout viewport (iOS handles safe areas
-     outside it), avoiding the dark-border problem caused by viewport-fit:cover. */
+  /* position:fixed;inset:0 fills the layout viewport (the full area between
+     the status bar and home indicator). This includes the area under the
+     floating Safari toolbar, so the map extends beneath it with no navy gap.
+     height:100% on html/body only gives the visual viewport (toolbar excluded),
+     which left a navy strip between the map and the Safari UI. */
   #root {
-    position: relative;
-    height: 100%;
+    position: fixed;
+    inset: 0;
     overflow: hidden;
   }
 
