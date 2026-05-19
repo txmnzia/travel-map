@@ -46,7 +46,6 @@ export class VehicleLayer {
       context: gl as WebGL2RenderingContext,
     });
     this.renderer.autoClear = false;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
   loadModel(url: string, scaleFactor = 1) {
@@ -75,6 +74,15 @@ export class VehicleLayer {
         const center = box.getCenter(new THREE.Vector3());
         model.position.x -= center.x / maxDim;
         model.position.z -= center.z / maxDim;
+
+        // Force single-sided rendering — doubleSided:true in the GLB causes
+        // back-face polygons to bleed outside the silhouette as a grey halo.
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => { m.side = THREE.FrontSide; });
+          }
+        });
 
         this.model = model;
         this.scene.add(this.model);
@@ -107,7 +115,7 @@ export class VehicleLayer {
     // 2. Scale (Y flipped — Mercator Y increases southward)
     // 3. rotateX(π/2): lay model flat (GLTF Y-up → map XZ ground plane)
     // 4. rotateY(-bearing): orient to face direction of travel
-    const bearingRad = -this.bearing * (Math.PI / 180);
+    const bearingRad = (-this.bearing + 180) * (Math.PI / 180);
     const modelMatrix = new THREE.Matrix4()
       .makeTranslation(coord.x, coord.y, coord.z ?? 0)
       .multiply(new THREE.Matrix4().makeScale(s, -s, s))
