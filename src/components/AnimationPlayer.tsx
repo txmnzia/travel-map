@@ -23,14 +23,29 @@ function buildFullRoute(state: TravelState): [number, number][] {
   return result;
 }
 
-function vehicleAtProgress(state: TravelState, progress: number): string {
-  if (state.segments.length === 0) return '✈️';
-  const idx = Math.min(
-    Math.floor(progress * state.segments.length),
-    state.segments.length - 1,
+/**
+ * For each segment, compute the normalized progress value [0..1] at which it ends.
+ * Uses actual geodesic length so vehicle transitions happen at the right location.
+ */
+function computeSegmentBreakpoints(state: TravelState): number[] {
+  if (state.segments.length === 0) return [];
+  const lengths = state.segments.map(seg =>
+    seg.route.length >= 2
+      ? turf.length(turf.lineString(seg.route), { units: 'kilometers' })
+      : 0,
   );
-  const seg = state.segments[idx];
-  return seg ? getVehicle(seg.vehicle).emoji : '✈️';
+  const total = lengths.reduce((a, b) => a + b, 0);
+  if (total === 0) return state.segments.map((_, i) => (i + 1) / state.segments.length);
+  let acc = 0;
+  return lengths.map(len => { acc += len; return acc / total; });
+}
+
+function vehicleAtProgress(state: TravelState, progress: number, breakpoints: number[]): string {
+  if (state.segments.length === 0) return '✈️';
+  for (let i = 0; i < breakpoints.length; i++) {
+    if (progress <= breakpoints[i]) return getVehicle(state.segments[i].vehicle).emoji;
+  }
+  return getVehicle(state.segments[state.segments.length - 1].vehicle).emoji;
 }
 
 function routeZoom(totalKm: number): number {
@@ -55,6 +70,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const startTimeRef = useRef<number>(0);
   const animZoomRef = useRef<number>(10);
   const totalKmRef = useRef<number>(0);
+  const segmentBreakpointsRef = useRef<number[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -63,10 +79,16 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   useEffect(() => {
     if (!map || fullRoute.length < 2) return;
 
-    // Precompute route length for zoom and distance badge
+    // Precompute lengths once
     const totalKm = turf.length(turf.lineString(fullRoute), { units: 'kilometers' });
     totalKmRef.current = totalKm;
     animZoomRef.current = routeZoom(totalKm);
+    segmentBreakpointsRef.current = computeSegmentBreakpoints(state);
+
+    // Hide pre-drawn route so only the growing trail is visible
+    if (map.getLayer('routes-line')) {
+      map.setLayoutProperty('routes-line', 'visibility', 'none');
+    }
 
     // Show trail layer
     if (map.getLayer('trail-line')) {
@@ -95,7 +117,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       'filter: drop-shadow(0 4px 10px rgba(0,0,0,0.8));',
       'transform: rotate(-90deg);',
     ].join(' ');
-    emojiEl.textContent = vehicleAtProgress(state, 0);
+    emojiEl.textContent = vehicleAtProgress(state, 0, segmentBreakpointsRef.current);
     el.appendChild(emojiEl);
     vehicleEmojiElRef.current = emojiEl;
 
@@ -104,6 +126,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     vehicleMarkerRef.current = marker;
 
     return () => {
+      // Restore route layer visibility
+      if (map.getLayer('routes-line')) {
+        map.setLayoutProperty('routes-line', 'visibility', 'visible');
+      }
       if (map.getLayer('trail-line')) {
         map.setLayoutProperty('trail-line', 'visibility', 'none');
       }
@@ -149,7 +175,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     }
     const emojiEl = vehicleEmojiElRef.current;
     if (emojiEl) {
-      emojiEl.textContent = vehicleAtProgress(state, prog);
+      emojiEl.textContent = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
     }
 
     const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
