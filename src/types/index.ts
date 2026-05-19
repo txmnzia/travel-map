@@ -13,6 +13,8 @@ export interface Segment {
   fromId: string;
   toId: string;
   vehicle: VehicleType;
+  /** True when the user explicitly chose this vehicle (blocks forward propagation) */
+  manualVehicle?: boolean;
   /** User-placed bezier control handles between the two waypoints */
   handles: [number, number][];
   /** Computed polyline coordinates [lng, lat][] */
