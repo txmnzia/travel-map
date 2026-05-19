@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { TravelState } from '../types';
-import { getVehicle } from '../utils/vehicles';
+import { getVehicle, vehicleModelUrl } from '../utils/vehicles';
 import { interpolateAlong, sliceRoute } from '../utils/routing';
+import { VehicleLayer } from './VehicleLayer';
 
 interface Props {
   map: maplibregl.Map | null;
@@ -40,12 +41,12 @@ function computeSegmentBreakpoints(state: TravelState): number[] {
   return lengths.map(len => { acc += len; return acc / total; });
 }
 
-function vehicleAtProgress(state: TravelState, progress: number, breakpoints: number[]): string {
-  if (state.segments.length === 0) return '✈️';
+function vehicleAtProgress(state: TravelState, progress: number, breakpoints: number[]) {
+  if (state.segments.length === 0) return state.segments[0];
   for (let i = 0; i < breakpoints.length; i++) {
-    if (progress <= breakpoints[i]) return getVehicle(state.segments[i].vehicle).emoji;
+    if (progress <= breakpoints[i]) return state.segments[i];
   }
-  return getVehicle(state.segments[state.segments.length - 1].vehicle).emoji;
+  return state.segments[state.segments.length - 1];
 }
 
 function routeZoom(totalKm: number): number {
@@ -64,8 +65,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
 
-  const vehicleMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const vehicleEmojiElRef = useRef<HTMLElement | null>(null);
+  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -73,6 +73,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const totalKmRef = useRef<number>(0);
   const segmentBreakpointsRef = useRef<number[]>([]);
   const smoothBearingRef = useRef<number>(0);
+  const lastVehicleTypeRef = useRef<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -91,22 +92,37 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (map.getLayer('routes-line')) {
       map.setLayoutProperty('routes-line', 'visibility', 'none');
     }
-
-    // Show trail layer
     if (map.getLayer('trail-line')) {
       map.setLayoutProperty('trail-line', 'visibility', 'visible');
     }
 
-    // Hide all waypoint / handle markers that exist before the vehicle marker is added
+    // Hide all waypoint / handle markers before adding the vehicle layer
     const existingMarkerEls = Array.from(
       map.getContainer().querySelectorAll<HTMLElement>('.maplibregl-marker'),
     );
     existingMarkerEls.forEach(m => { m.style.visibility = 'hidden'; });
     hiddenMarkersRef.current = existingMarkerEls;
 
-    // Set perspective camera at route start facing direction of travel
+    // Add Three.js vehicle layer
+    const layer = new VehicleLayer();
+    // Cast needed: MapLibre v4 render signature uses mat4 (gl-matrix), not number[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    map.addLayer(layer as any);
+    vehicleLayerRef.current = layer;
+
+    // Load first segment's vehicle model
+    const firstSeg = state.segments[0];
+    if (firstSeg) {
+      const cfg = getVehicle(firstSeg.vehicle);
+      layer.position = fullRoute[0];
+      layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleMeters);
+      lastVehicleTypeRef.current = firstSeg.vehicle;
+    }
+
+    // Set perspective camera at route start
     const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
     smoothBearingRef.current = startBearing;
+    layer.bearing = startBearing;
     map.easeTo({
       center: startPos,
       bearing: startBearing,
@@ -115,32 +131,17 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       duration: 800,
     });
 
-    // Vehicle marker: emoji rotated -90deg so it faces "up" = direction of travel
-    // (camera bearing tracks vehicle bearing, so "up" on screen = forward)
-    const el = document.createElement('div');
-    el.style.cssText = 'pointer-events: none;';
-
-    const emojiEl = document.createElement('div');
-    emojiEl.style.cssText = [
-      'font-size: 48px;',
-      'line-height: 1;',
-      'filter: drop-shadow(0 4px 10px rgba(0,0,0,0.8));',
-      'transform: rotate(-90deg);',
-    ].join(' ');
-    emojiEl.textContent = vehicleAtProgress(state, 0, segmentBreakpointsRef.current);
-    el.appendChild(emojiEl);
-    vehicleEmojiElRef.current = emojiEl;
-
-    const marker = new maplibregl.Marker({ element: el, anchor: 'center' });
-    marker.setLngLat(fullRoute[0]).addTo(map);
-    vehicleMarkerRef.current = marker;
-
     return () => {
-      // Restore waypoint / handle markers
+      // Restore markers
       hiddenMarkersRef.current.forEach(m => { m.style.visibility = ''; });
       hiddenMarkersRef.current = [];
 
-      // Restore route layer visibility
+      // Remove vehicle layer
+      if (map.getLayer('vehicle-layer')) map.removeLayer('vehicle-layer');
+      vehicleLayerRef.current = null;
+      lastVehicleTypeRef.current = '';
+
+      // Restore route layer
       if (map.getLayer('routes-line')) {
         map.setLayoutProperty('routes-line', 'visibility', 'visible');
       }
@@ -154,12 +155,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         properties: {},
       });
 
-      vehicleMarkerRef.current?.remove();
-      vehicleMarkerRef.current = null;
-      vehicleEmojiElRef.current = null;
       cancelAnimationFrame(animFrameRef.current);
-
-      // Restore flat top-down camera
       map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,15 +179,28 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const { position, bearing } = interpolateAlong(fullRoute, prog);
     const trail = sliceRoute(fullRoute, prog);
 
-    const marker = vehicleMarkerRef.current;
-    if (marker) {
-      marker.setLngLat(position);
-    }
-    const emojiEl = vehicleEmojiElRef.current;
-    if (emojiEl) {
-      emojiEl.textContent = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
+    // Smooth camera bearing
+    let delta = bearing - smoothBearingRef.current;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    smoothBearingRef.current += delta * 0.08;
+
+    // Update 3D vehicle layer
+    const layer = vehicleLayerRef.current;
+    if (layer) {
+      layer.position = position;
+      layer.bearing = smoothBearingRef.current;
+
+      // Switch model when entering a new segment
+      const seg = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
+      if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
+        const cfg = getVehicle(seg.vehicle);
+        layer.loadModel(vehicleModelUrl(seg.vehicle), cfg.scaleMeters);
+        lastVehicleTypeRef.current = seg.vehicle;
+      }
     }
 
+    // Update trail
     const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
     if (trailSrc && trail.length >= 2) {
       trailSrc.setData({
@@ -201,15 +210,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Smooth the camera bearing so sharp turns don't cause violent pivots.
-    // Lerp toward the target bearing each frame, normalising the delta to
-    // [-180, 180] so we always take the short arc around the circle.
-    let delta = bearing - smoothBearingRef.current;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    smoothBearingRef.current += delta * 0.08;
-
-    // Chase camera: smoothed bearing tracks vehicle direction, pitch stays at 60°
+    // Chase camera
     map.easeTo({
       center: position,
       bearing: smoothBearingRef.current,
@@ -245,7 +246,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         properties: {},
       });
 
-      // Snap camera back to start position before replaying
       const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
       smoothBearingRef.current = startBearing;
       map.easeTo({
@@ -255,6 +255,17 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         zoom: animZoomRef.current,
         duration: 400,
       });
+
+      // Reload first vehicle
+      const layer = vehicleLayerRef.current;
+      const firstSeg = state.segments[0];
+      if (layer && firstSeg) {
+        layer.position = fullRoute[0];
+        layer.bearing = startBearing;
+        const cfg = getVehicle(firstSeg.vehicle);
+        layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleMeters);
+        lastVehicleTypeRef.current = firstSeg.vehicle;
+      }
     }
 
     setIsPlaying(true);
@@ -262,10 +273,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       startTimeRef.current = ts;
       animate(ts);
     });
-  }, [animate, map, fullRoute]);
-
-  // NOTE: no useEffect on isPlaying — cleanup fires on every change and would
-  // cancel the animation frame immediately after play() starts it.
+  }, [animate, map, fullRoute, state]);
 
   const downloadVideo = useCallback(async () => {
     if (!map || fullRoute.length < 2) return;
@@ -327,12 +335,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         </div>
       )}
 
-      {/* Spacer */}
       <div className="flex-1" />
 
       {/* Bottom controls */}
       <div className="pointer-events-auto bg-navy/90 backdrop-blur-md rounded-t-3xl px-5 pt-5 pb-safe">
-        {/* Progress bar */}
         <div className="w-full h-1.5 bg-white/20 rounded-full mb-4 overflow-hidden">
           <div
             className="h-full bg-amber rounded-full transition-none"
@@ -340,7 +346,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           />
         </div>
 
-        {/* Video length */}
         <div className="flex items-center justify-between mb-1">
           <span className="text-white/70 text-sm">Video length</span>
           <span className="text-white font-bold text-sm">{duration}s</span>
@@ -356,16 +361,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           disabled={isPlaying}
         />
 
-        {/* Action buttons */}
         <div className="flex gap-3 mb-4">
           <button
             onClick={isPlaying ? stopAnimation : play}
             disabled={!hasRoute}
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
-              hasRoute
-                ? 'bg-amber text-navy'
-                : 'bg-white/20 text-white/40 cursor-not-allowed',
+              hasRoute ? 'bg-amber text-navy' : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
           >
             {isPlaying ? '⏹ Stop' : '▶ Play'}
