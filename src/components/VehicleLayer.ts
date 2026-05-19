@@ -87,12 +87,17 @@ export class VehicleLayer {
         glbScene.position.x -= center.x / maxDim;
         glbScene.position.z -= center.z / maxDim;
 
-        // Force front-side — doubleSided:true in the GLB causes back-face
-        // polygons to bleed outside the silhouette as a grey halo
+        // Force opaque front-side rendering: prevents back-face halos and
+        // alpha-blending artefacts when compositing over MapLibre's canvas
         glbScene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach(m => { m.side = THREE.FrontSide; });
+            mats.forEach(m => {
+              m.side = THREE.FrontSide;
+              m.transparent = false;
+              m.depthWrite = true;
+              (m as THREE.MeshStandardMaterial).alphaTest = 0;
+            });
           }
         });
 
@@ -146,7 +151,7 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
-    // Model-to-clip matrix
+    // +180° offset: GLB models face +Z which maps to south in Mercator space
     const bearingRad = (-this.bearing + 180) * (Math.PI / 180);
     const modelMatrix = new THREE.Matrix4()
       .makeTranslation(coord.x, coord.y, coord.z ?? 0)
