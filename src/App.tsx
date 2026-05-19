@@ -17,9 +17,6 @@ export default function App() {
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  // Hint: shown until user explicitly taps it OR until first waypoint is placed
-  const [hintDismissed, setHintDismissed] = useState(false);
-
   const [vehicleSelector, setVehicleSelector] = useState<{
     segmentId: string;
     vehicle: VehicleType;
@@ -64,7 +61,7 @@ export default function App() {
   const map = mapEditorRef.current?.getMap() ?? null;
 
   return (
-    <div className="relative w-screen h-dvh overflow-hidden bg-navy">
+    <div className="fixed inset-0 overflow-hidden bg-navy">
 
       {/* Map (always mounted) */}
       <MapEditor
@@ -79,30 +76,6 @@ export default function App() {
       {/* Edit mode overlays */}
       {mode === 'edit' && (
         <>
-          {/* Hint — outer is pointer-events-none so the map stays tappable,
-              inner card is pointer-events-auto so clicking it dismisses
-              without a waypoint being placed (native propagation stopped). */}
-          {state.waypoints.length === 0 && !hintDismissed && (
-            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 pointer-events-none px-8 z-10">
-              <div
-                className="bg-navy/90 backdrop-blur-sm rounded-2xl px-6 py-5 text-center pointer-events-auto cursor-pointer select-none"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Stop the native event so MapLibre's document-level listener
-                  // never receives this click → no waypoint placed
-                  e.nativeEvent.stopImmediatePropagation();
-                  setHintDismissed(true);
-                }}
-              >
-                <p className="text-white font-bold text-lg mb-1">Tap the map</p>
-                <p className="text-white/60 text-sm">to place your first waypoint</p>
-                <p className="text-white/30 text-xs mt-3 border-t border-white/10 pt-2">
-                  Tap here to dismiss
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Bottom toolbar */}
           <Toolbar
             canUndo={canUndo}
