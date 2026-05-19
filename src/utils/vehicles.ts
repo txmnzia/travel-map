@@ -7,35 +7,35 @@ export interface VehicleConfig {
   label: string;
   emoji: string;
   category: VehicleCategory;
-  /** Scale in meters — controls how large the 3D model appears on the map */
-  scaleMeters: number;
+  /** Dimensionless multiplier on top of the base 80-px target size */
+  scaleFactor: number;
 }
 
 export const VEHICLES: VehicleConfig[] = [
   // Cars & road
-  { type: 'sedan',      label: 'Sedan',      emoji: '🚗', category: 'Cars',  scaleMeters: 30 },
-  { type: 'suv',        label: 'SUV',         emoji: '🚙', category: 'Cars',  scaleMeters: 30 },
-  { type: 'sports-car', label: 'Sports Car',  emoji: '🏎️', category: 'Cars',  scaleMeters: 30 },
-  { type: 'race-car',   label: 'Race Car',    emoji: '🏎️', category: 'Cars',  scaleMeters: 30 },
-  { type: 'taxi',       label: 'Taxi',        emoji: '🚕', category: 'Cars',  scaleMeters: 30 },
-  { type: 'truck',      label: 'Truck',       emoji: '🚛', category: 'Cars',  scaleMeters: 40 },
-  { type: 'ambulance',  label: 'Ambulance',   emoji: '🚑', category: 'Cars',  scaleMeters: 35 },
-  { type: 'firetruck',  label: 'Fire Truck',  emoji: '🚒', category: 'Cars',  scaleMeters: 40 },
+  { type: 'sedan',      label: 'Sedan',      emoji: '🚗', category: 'Cars',  scaleFactor: 1.0 },
+  { type: 'suv',        label: 'SUV',         emoji: '🚙', category: 'Cars',  scaleFactor: 1.0 },
+  { type: 'sports-car', label: 'Sports Car',  emoji: '🏎️', category: 'Cars',  scaleFactor: 1.0 },
+  { type: 'race-car',   label: 'Race Car',    emoji: '🏎️', category: 'Cars',  scaleFactor: 1.0 },
+  { type: 'taxi',       label: 'Taxi',        emoji: '🚕', category: 'Cars',  scaleFactor: 1.0 },
+  { type: 'truck',      label: 'Truck',       emoji: '🚛', category: 'Cars',  scaleFactor: 1.3 },
+  { type: 'ambulance',  label: 'Ambulance',   emoji: '🚑', category: 'Cars',  scaleFactor: 1.1 },
+  { type: 'firetruck',  label: 'Fire Truck',  emoji: '🚒', category: 'Cars',  scaleFactor: 1.3 },
   // Boats
-  { type: 'speedboat',  label: 'Speedboat',   emoji: '🚤', category: 'Boats', scaleMeters: 40 },
-  { type: 'sailboat',   label: 'Sailboat',    emoji: '⛵', category: 'Boats', scaleMeters: 40 },
-  { type: 'rowboat',    label: 'Rowboat',     emoji: '🚣', category: 'Boats', scaleMeters: 30 },
-  { type: 'tugboat',    label: 'Tugboat',     emoji: '🛥️', category: 'Boats', scaleMeters: 40 },
-  { type: 'fanboat',    label: 'Fan Boat',    emoji: '🛶', category: 'Boats', scaleMeters: 35 },
+  { type: 'speedboat',  label: 'Speedboat',   emoji: '🚤', category: 'Boats', scaleFactor: 1.2 },
+  { type: 'sailboat',   label: 'Sailboat',    emoji: '⛵', category: 'Boats', scaleFactor: 1.2 },
+  { type: 'rowboat',    label: 'Rowboat',     emoji: '🚣', category: 'Boats', scaleFactor: 0.9 },
+  { type: 'tugboat',    label: 'Tugboat',     emoji: '🛥️', category: 'Boats', scaleFactor: 1.2 },
+  { type: 'fanboat',    label: 'Fan Boat',    emoji: '🛶', category: 'Boats', scaleFactor: 1.0 },
   // Ships
-  { type: 'cargo-ship',  label: 'Cargo Ship',  emoji: '🚢', category: 'Ships', scaleMeters: 120 },
-  { type: 'ocean-liner', label: 'Ocean Liner', emoji: '🛳️', category: 'Ships', scaleMeters: 150 },
-  { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Ships', scaleMeters: 100 },
+  { type: 'cargo-ship',  label: 'Cargo Ship',  emoji: '🚢', category: 'Ships', scaleFactor: 2.5 },
+  { type: 'ocean-liner', label: 'Ocean Liner', emoji: '🛳️', category: 'Ships', scaleFactor: 3.0 },
+  { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Ships', scaleFactor: 2.0 },
   // Rail
-  { type: 'locomotive',   label: 'Locomotive',   emoji: '🚂', category: 'Rail', scaleMeters: 50 },
-  { type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleMeters: 60 },
-  { type: 'tram',         label: 'Tram',         emoji: '🚊', category: 'Rail', scaleMeters: 45 },
-  { type: 'subway',       label: 'Subway',       emoji: '🚇', category: 'Rail', scaleMeters: 55 },
+  { type: 'locomotive',   label: 'Locomotive',   emoji: '🚂', category: 'Rail', scaleFactor: 1.5 },
+  { type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 1.8 },
+  { type: 'tram',         label: 'Tram',         emoji: '🚊', category: 'Rail', scaleFactor: 1.4 },
+  { type: 'subway',       label: 'Subway',       emoji: '🚇', category: 'Rail', scaleFactor: 1.6 },
 ];
 
 export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Ships', 'Rail'];

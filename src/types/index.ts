@@ -1,15 +1,11 @@
+export type VehicleType =
+  | 'sedan' | 'suv' | 'sports-car' | 'race-car' | 'taxi' | 'truck' | 'ambulance' | 'firetruck'
+  | 'speedboat' | 'sailboat' | 'rowboat' | 'tugboat' | 'fanboat'
+  | 'cargo-ship' | 'ocean-liner' | 'pirate-ship'
+  | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
+
 export type AppMode = 'edit' | 'preview';
 export type MapStyleId = 'bright' | 'liberty' | 'positron';
-
-export type VehicleType =
-  // Cars & road
-  | 'sedan' | 'suv' | 'sports-car' | 'race-car' | 'taxi' | 'truck' | 'ambulance' | 'firetruck'
-  // Boats
-  | 'speedboat' | 'sailboat' | 'rowboat' | 'tugboat' | 'fanboat'
-  // Ships
-  | 'cargo-ship' | 'ocean-liner' | 'pirate-ship'
-  // Rail
-  | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
 
 export interface Waypoint {
   id: string;
@@ -22,7 +18,6 @@ export interface Segment {
   fromId: string;
   toId: string;
   vehicle: VehicleType;
-  /** True when the user explicitly chose this vehicle (blocks forward propagation) */
   manualVehicle?: boolean;
   /** User-placed bezier control handles between the two waypoints */
   handles: [number, number][];
