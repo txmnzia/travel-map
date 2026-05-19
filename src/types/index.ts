@@ -1,6 +1,15 @@
-export type VehicleType = 'plane' | 'car' | 'train' | 'bicycle' | 'walk';
 export type AppMode = 'edit' | 'preview';
 export type MapStyleId = 'bright' | 'liberty' | 'positron';
+
+export type VehicleType =
+  // Cars & road
+  | 'sedan' | 'suv' | 'sports-car' | 'race-car' | 'taxi' | 'truck' | 'ambulance' | 'firetruck'
+  // Boats
+  | 'speedboat' | 'sailboat' | 'rowboat' | 'tugboat' | 'fanboat'
+  // Ships
+  | 'cargo-ship' | 'ocean-liner' | 'pirate-ship'
+  // Rail
+  | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
 
 export interface Waypoint {
   id: string;

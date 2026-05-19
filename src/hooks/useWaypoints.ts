@@ -245,7 +245,7 @@ export function useWaypoints() {
 
       if (prev) {
         // Inherit the last segment's vehicle so the route type stays consistent
-        const vehicle = history.present.segments.at(-1)?.vehicle ?? 'plane';
+        const vehicle = history.present.segments.at(-1)?.vehicle ?? 'sedan';
         const route = computeRoute([prev.lng, prev.lat], [lng, lat], vehicle, []);
         segment = {
           id: `seg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
