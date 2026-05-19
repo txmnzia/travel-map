@@ -9,27 +9,19 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* html and body must NOT have overflow:hidden — on iOS Safari that creates a
-     scroll container which constrains position:fixed children to the layout
-     viewport (safe area only), causing dark borders under the Dynamic Island
-     and home indicator. overscroll-behavior:none prevents rubber-band without
-     creating a clipping context. */
   html, body {
     margin: 0;
     padding: 0;
+    height: 100%;
     overscroll-behavior: none;
   }
 
-  /* #root fills the physical screen. height uses --app-height which is driven
-     by window.innerHeight in main.tsx — on iOS Safari with viewport-fit=cover
-     that gives the true full-screen height including safe areas, whereas CSS
-     100vh / inset:0 only reach the layout viewport and leave dark borders. */
+  /* position:relative makes #root the containing block for all absolute
+     children. height:100% fills the layout viewport (iOS handles safe areas
+     outside it), avoiding the dark-border problem caused by viewport-fit:cover. */
   #root {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: var(--app-height, 100dvh);
+    position: relative;
+    height: 100%;
     overflow: hidden;
   }
 
