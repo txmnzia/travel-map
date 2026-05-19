@@ -87,15 +87,13 @@ function createWaypointEl(
 function createHandleEl(): HTMLElement {
   const el = document.createElement('div');
   el.style.cssText = `
-    width: 22px;
-    height: 22px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: #f5a623;
-    border: 3px solid white;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    background: rgba(245, 166, 35, 0.55);
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
     cursor: grab;
     user-select: none;
-    display: none;
   `;
   return el;
 }
