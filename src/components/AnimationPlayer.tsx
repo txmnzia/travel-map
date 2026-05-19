@@ -312,28 +312,23 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col pointer-events-none">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 pt-safe mt-3 pointer-events-auto">
+      {/* Back button + distance badge — float over the map */}
+      <div className="flex items-start justify-between px-4 pt-safe mt-3 pointer-events-auto">
         <button
           onClick={onBack}
           className="w-11 h-11 rounded-full bg-navy/80 backdrop-blur flex items-center justify-center text-white text-xl shadow-lg active:scale-95 transition-transform"
         >
           ←
         </button>
-        <h1 className="text-white font-bold text-lg tracking-wide drop-shadow-lg">
-          Preview Video
-        </h1>
-        <div className="w-11" />
-      </div>
 
-      {/* Distance badge */}
-      {isPlaying && (
-        <div className="flex justify-center mt-6">
+        {isPlaying && (
           <div className="bg-red-500 text-white font-bold text-xl px-6 py-2 rounded-full shadow-lg">
             {kmTraveled.toLocaleString()} km
           </div>
-        </div>
-      )}
+        )}
+
+        <div className="w-11" />
+      </div>
 
       <div className="flex-1" />
 
