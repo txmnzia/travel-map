@@ -2,15 +2,20 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import maplibregl from 'maplibre-gl';
 
+function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
 /**
  * MapLibre custom layer that renders a GLTF/GLB vehicle model in 3D map space.
  *
  * Scale is computed per-frame to maintain a consistent ~80 CSS-pixel apparent
- * width at any zoom level, so the vehicle is always clearly visible whether the
- * camera is watching a 10 km route or a 5 000 km route.
+ * width at any zoom level. Each loaded model is normalised to a 1-unit bounding
+ * box so the pixel-size math is predictable regardless of the original GLB scale.
  *
- * Each loaded model is normalised to a 1-unit bounding box so the pixel-size
- * math works the same regardless of how the original GLB was scaled.
+ * Vehicle switches animate with a pop-in / pop-out scale effect.
  */
 export class VehicleLayer {
   readonly id = 'vehicle-layer';
@@ -21,13 +26,17 @@ export class VehicleLayer {
   private scene!: THREE.Scene;
   private camera!: THREE.Camera;
   private renderer!: THREE.WebGLRenderer;
-  private model: THREE.Object3D | null = null;
+
+  private model: THREE.Group | null = null;    // wrapper for the incoming model
+  private modelAnimStart = 0;                  // performance.now() when model appeared
+
+  private outgoing: THREE.Group | null = null; // wrapper for the previous model (animating out)
+  private outgoingAnimStart = 0;
+
   private readonly loader = new GLTFLoader();
   private loadingUrl = '';
 
-  /** Multiplier on top of the base 80 px target — larger vehicles can use >1 */
   scaleFactor = 1;
-
   position: [number, number] = [0, 0];
   bearing = 0;
 
@@ -53,39 +62,49 @@ export class VehicleLayer {
     this.loadingUrl = url;
     this.scaleFactor = scaleFactor;
 
+    // Send current model to outgoing (will animate out)
     if (this.model) {
-      this.scene.remove(this.model);
+      if (this.outgoing) this.scene.remove(this.outgoing);
+      this.outgoing = this.model;
+      this.outgoingAnimStart = performance.now();
       this.model = null;
     }
 
     this.loader.load(
       url,
       (gltf) => {
-        if (this.loadingUrl !== url) return; // superseded by a newer loadModel call
-        const model = gltf.scene;
+        if (this.loadingUrl !== url) return;
+        const glbScene = gltf.scene;
 
-        // Normalise to a 1-unit bounding box so the pixel-size formula is predictable
-        const box = new THREE.Box3().setFromObject(model);
+        // Normalise to a 1-unit bounding box
+        const box = new THREE.Box3().setFromObject(glbScene);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0) model.scale.setScalar(1 / maxDim);
+        if (maxDim > 0) glbScene.scale.setScalar(1 / maxDim);
 
-        // Centre horizontally; keep the model base at y=0
+        // Centre horizontally; keep base at y=0
         const center = box.getCenter(new THREE.Vector3());
-        model.position.x -= center.x / maxDim;
-        model.position.z -= center.z / maxDim;
+        glbScene.position.x -= center.x / maxDim;
+        glbScene.position.z -= center.z / maxDim;
 
-        // Force single-sided rendering — doubleSided:true in the GLB causes
-        // back-face polygons to bleed outside the silhouette as a grey halo.
-        model.traverse((child) => {
+        // Force front-side — doubleSided:true in the GLB causes back-face
+        // polygons to bleed outside the silhouette as a grey halo
+        glbScene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => { m.side = THREE.FrontSide; });
           }
         });
 
-        this.model = model;
-        this.scene.add(this.model);
+        // Wrap in a Group so we can animate scale without touching the model's
+        // own scale (which is used for bounding-box normalisation)
+        const wrapper = new THREE.Group();
+        wrapper.add(glbScene);
+        wrapper.scale.setScalar(0); // start invisible; animate to 1
+
+        this.model = wrapper;
+        this.modelAnimStart = performance.now();
+        this.scene.add(wrapper);
         this.map?.triggerRepaint();
       },
       undefined,
@@ -93,28 +112,41 @@ export class VehicleLayer {
     );
   }
 
-  // matrix is MapLibre's mat4 — Float32Array at runtime, typed as IndexedCollection in v4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   render(_gl: unknown, matrix: any) {
-    if (!this.model) return;
+    if (!this.model && !this.outgoing) return;
+
+    const now = performance.now();
+
+    // Animate outgoing model shrinking to zero
+    if (this.outgoing) {
+      const t = Math.min((now - this.outgoingAnimStart) / 180, 1);
+      this.outgoing.scale.setScalar(1 - t);
+      if (t >= 1) {
+        this.scene.remove(this.outgoing);
+        this.outgoing = null;
+      }
+    }
+
+    // Animate incoming model popping in
+    if (this.model && this.modelAnimStart > 0) {
+      const t = Math.min((now - this.modelAnimStart) / 280, 1);
+      this.model.scale.setScalar(Math.max(0, easeOutBack(t)));
+      if (t >= 1) this.modelAnimStart = 0;
+    }
 
     const coord = maplibregl.MercatorCoordinate.fromLngLat(
       { lng: this.position[0], lat: this.position[1] },
       0,
     );
 
-    // Zoom-adaptive scale: always appear ~80 CSS pixels wide regardless of zoom.
-    // Formula: at zoom Z with tile size 512, 1 px ≈ 40 075 017 / (512 × 2^Z) metres.
+    // Zoom-adaptive scale: always appear ~80 CSS pixels wide regardless of zoom
     const zoom = this.map.getZoom();
     const metersPerPx = 40_075_017 / (512 * Math.pow(2, zoom));
     const desiredMeters = 80 * metersPerPx * this.scaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
-    // Model-to-clip matrix:
-    // 1. Translate to Mercator position
-    // 2. Scale (Y flipped — Mercator Y increases southward)
-    // 3. rotateX(π/2): lay model flat (GLTF Y-up → map XZ ground plane)
-    // 4. rotateY(-bearing): orient to face direction of travel
+    // Model-to-clip matrix
     const bearingRad = (-this.bearing + 180) * (Math.PI / 180);
     const modelMatrix = new THREE.Matrix4()
       .makeTranslation(coord.x, coord.y, coord.z ?? 0)
@@ -123,8 +155,8 @@ export class VehicleLayer {
       .multiply(new THREE.Matrix4().makeRotationY(bearingRad));
 
     this.camera.projectionMatrix = new THREE.Matrix4()
-      .fromArray(matrix)          // MapLibre view-projection matrix
-      .multiply(modelMatrix);     // × local model transform
+      .fromArray(matrix)
+      .multiply(modelMatrix);
 
     this.renderer.resetState();
     this.renderer.render(this.scene, this.camera);
@@ -133,6 +165,7 @@ export class VehicleLayer {
 
   onRemove() {
     if (this.model) this.scene.remove(this.model);
+    if (this.outgoing) this.scene.remove(this.outgoing);
     this.renderer.dispose();
   }
 }

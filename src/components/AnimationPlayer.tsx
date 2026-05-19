@@ -179,11 +179,11 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const { position, bearing } = interpolateAlong(fullRoute, prog);
     const trail = sliceRoute(fullRoute, prog);
 
-    // Smooth camera bearing
+    // Smooth the vehicle model's bearing (the 3D model turns, not the map)
     let delta = bearing - smoothBearingRef.current;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
-    smoothBearingRef.current += delta * 0.08;
+    smoothBearingRef.current += delta * 0.06;
 
     // Update 3D vehicle layer
     const layer = vehicleLayerRef.current;
@@ -210,10 +210,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Chase camera
+    // Chase camera — follow position only, keep bearing fixed (north-up).
+    // The 3D model itself rotates to face the direction of travel.
     map.easeTo({
       center: position,
-      bearing: smoothBearingRef.current,
       pitch: 60,
       zoom: animZoomRef.current,
       duration: 80,
