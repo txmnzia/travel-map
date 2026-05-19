@@ -202,6 +202,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         });
 
         mapReadyRef.current = true;
+        // Resize after load so the canvas fills the container after browser layout settles
+        requestAnimationFrame(() => map.resize());
       });
 
       // Click on empty map → add new destination waypoint
@@ -215,7 +217,12 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         addWaypointRef.current(e.lngLat.lng, e.lngLat.lat);
       });
 
+      // Resize when browser chrome shows/hides (iOS Safari URL bar)
+      const onWindowResize = () => map.resize();
+      window.addEventListener('resize', onWindowResize);
+
       return () => {
+        window.removeEventListener('resize', onWindowResize);
         map.remove();
         mapRef.current = null;
         mapReadyRef.current = false;
