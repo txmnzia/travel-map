@@ -568,18 +568,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       waitForStyle();
     }, [state.segments]);
 
-    // Fit map to route when waypoints change
-    useEffect(() => {
-      const map = mapRef.current;
-      if (!map || state.waypoints.length < 2) return;
-
-      const coords = state.waypoints.map(w => [w.lng, w.lat] as [number, number]);
-      const bounds = coords.reduce(
-        (b, c) => b.extend(c),
-        new maplibregl.LngLatBounds(coords[0], coords[0]),
-      );
-      map.fitBounds(bounds, { padding: 100, maxZoom: 8, duration: 600 });
-    }, [state.waypoints.length]);
 
     return (
       <div
