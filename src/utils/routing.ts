@@ -3,25 +3,18 @@ import { VehicleType } from '../types';
 
 /**
  * Compute a curved polyline for a segment.
- * - Plane with no handles: great-circle arc
  * - Any vehicle with handles: quadratic/cubic Bezier through the handles
- * - Others with no handles: straight line
+ * - Others: straight line
  */
 export function computeRoute(
   from: [number, number],
   to: [number, number],
-  vehicle: VehicleType,
+  _vehicle: VehicleType,
   handles: [number, number][],
 ): [number, number][] {
   if (handles.length > 0) {
     return bezierCurve(from, handles, to, 80);
   }
-
-  if (vehicle === 'plane') {
-    return greatCircleArc(from, to);
-  }
-
-  // Straight line for all other vehicles (no road-snapping)
   return [from, to];
 }
 
