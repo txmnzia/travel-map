@@ -129,14 +129,13 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => {
       if (!containerRef.current) return;
 
-      // Set an explicit pixel height BEFORE MapLibre reads container.offsetHeight.
-      // CSS units (100%, 100lvh, etc.) can be misread on iOS Safari — offsetHeight
-      // may return the visual viewport height instead of the layout viewport height,
-      // leaving a navy gap below the canvas. An explicit px value cannot be
-      // misreported: offsetHeight always equals the inline style pixel value.
+      // Use screen.height (physical screen height in CSS px) so the canvas is
+      // always taller than any viewport measurement iOS could return. The excess
+      // is clipped by #root's overflow:hidden. This sidesteps every iOS Safari
+      // quirk around clientHeight / innerHeight / 100dvh under-reporting.
       const applyHeight = () => {
         if (containerRef.current) {
-          containerRef.current.style.height = `${document.documentElement.clientHeight}px`;
+          containerRef.current.style.height = `${window.screen.height}px`;
         }
       };
       applyHeight();
