@@ -82,7 +82,7 @@ export function MenuDrawer({
         </div>
 
         {/* Gesture guide */}
-        <div className="px-6 py-4 border-t border-white/10 mt-auto pb-safe">
+        <div className="px-6 py-4 border-t border-white/10 mt-auto">
           <p className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-2">
             Gestures
           </p>
@@ -98,6 +98,11 @@ export function MenuDrawer({
               <span className="text-white/40 text-xs">{text}</span>
             </div>
           ))}
+        </div>
+
+        {/* Version */}
+        <div className="px-6 py-3 border-t border-white/10 pb-safe">
+          <p className="text-white/20 text-xs text-center">Draw a Route · v0.1</p>
         </div>
       </div>
     </>
