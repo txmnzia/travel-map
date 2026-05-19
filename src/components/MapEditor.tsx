@@ -340,13 +340,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         const isFirst = idx === 0;
 
         if (existing.has(wp.id)) {
-          // Refresh element (vehicle icon may have changed) by recreating marker
+          // Refresh element (vehicle icon may have changed) by recreating marker.
+          // Hide briefly to prevent a 1-frame flash at the map origin (0,0).
           existing.get(wp.id)!.remove();
           const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
+          el.style.visibility = 'hidden';
           setupWaypointEl(el, wp.id, segments, isLast);
           const newMarker = new maplibregl.Marker({ element: el, draggable: true, anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center' })
             .setLngLat([wp.lng, wp.lat])
             .addTo(map);
+          requestAnimationFrame(() => { el.style.visibility = ''; });
           newMarker.on('drag', makeLiveDragHandler(newMarker, wp.id));
           newMarker.on('dragend', () => {
             const ll = newMarker.getLngLat();
