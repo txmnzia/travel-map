@@ -64,24 +64,7 @@ export default function App() {
   const map = mapEditorRef.current?.getMap() ?? null;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-navy">
-      {/* Header */}
-      {mode === 'edit' && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-navy pt-safe">
-          <div className="flex items-center justify-between px-4 py-3">
-            <button
-              onClick={() => setShowMenu(true)}
-              className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white text-lg shadow active:scale-90 transition-transform"
-            >
-              ☰
-            </button>
-            <h1 className="text-white font-black text-xl tracking-widest uppercase">
-              Draw a Route
-            </h1>
-            <div className="w-10" />
-          </div>
-        </div>
-      )}
+    <div className="relative w-screen h-dvh overflow-hidden bg-navy">
 
       {/* Map (always mounted) */}
       <MapEditor
@@ -130,6 +113,7 @@ export default function App() {
             onPlay={enterPreview}
             onClear={() => dispatch({ type: 'CLEAR_ALL' })}
             onStylePicker={() => setShowStylePicker(true)}
+            onMenu={() => setShowMenu(true)}
           />
 
           {/* Vehicle selector bottom sheet */}
