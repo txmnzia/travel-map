@@ -11,7 +11,6 @@ interface Props {
   onBack: () => void;
 }
 
-// Build a flat route from all segments (concatenated)
 function buildFullRoute(state: TravelState): [number, number][] {
   const result: [number, number][] = [];
   for (const seg of state.segments) {
@@ -24,11 +23,7 @@ function buildFullRoute(state: TravelState): [number, number][] {
   return result;
 }
 
-// Determine vehicle at a given progress along full route
-function vehicleAtProgress(
-  state: TravelState,
-  progress: number,
-): string {
+function vehicleAtProgress(state: TravelState, progress: number): string {
   if (state.segments.length === 0) return '✈️';
   const idx = Math.min(
     Math.floor(progress * state.segments.length),
@@ -38,62 +33,94 @@ function vehicleAtProgress(
   return seg ? getVehicle(seg.vehicle).emoji : '✈️';
 }
 
+function routeZoom(totalKm: number): number {
+  if (totalKm < 5) return 15;
+  if (totalKm < 20) return 14;
+  if (totalKm < 80) return 12;
+  if (totalKm < 300) return 10;
+  if (totalKm < 1500) return 7;
+  return 5;
+}
+
 export function AnimationPlayer({ map, state, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(10); // seconds
-  const [cameraFollow, setCameraFollow] = useState(true);
+  const [duration, setDuration] = useState(10);
+  const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
 
   const vehicleMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const vehicleEmojiElRef = useRef<HTMLElement | null>(null);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
+  const animZoomRef = useRef<number>(10);
+  const totalKmRef = useRef<number>(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
   const fullRoute = buildFullRoute(state);
 
-  // Set up animation view on mount
   useEffect(() => {
-    if (!map) return;
+    if (!map || fullRoute.length < 2) return;
+
+    // Precompute route length for zoom and distance badge
+    const totalKm = turf.length(turf.lineString(fullRoute), { units: 'kilometers' });
+    totalKmRef.current = totalKm;
+    animZoomRef.current = routeZoom(totalKm);
 
     // Show trail layer
     if (map.getLayer('trail-line')) {
       map.setLayoutProperty('trail-line', 'visibility', 'visible');
     }
 
-    // Fit map to show the full route
-    if (fullRoute.length >= 2) {
-      const coords = fullRoute;
-      const bounds = coords.reduce(
-        (b, c) => b.extend(c as [number, number]),
-        new maplibregl.LngLatBounds(coords[0], coords[0]),
-      );
-      map.fitBounds(bounds, { padding: 80, maxZoom: 6, duration: 800 });
-    }
+    // Set perspective camera at route start facing direction of travel
+    const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+    map.easeTo({
+      center: startPos,
+      bearing: startBearing,
+      pitch: 60,
+      zoom: animZoomRef.current,
+      duration: 800,
+    });
 
-    // Create vehicle marker at start of route
+    // Vehicle marker: emoji rotated -90deg so it faces "up" = direction of travel
+    // (camera bearing tracks vehicle bearing, so "up" on screen = forward)
     const el = document.createElement('div');
-    el.style.cssText = 'font-size: 36px; line-height: 1; pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));';
-    el.textContent = vehicleAtProgress(state, 0);
+    el.style.cssText = 'pointer-events: none;';
+
+    const emojiEl = document.createElement('div');
+    emojiEl.style.cssText = [
+      'font-size: 48px;',
+      'line-height: 1;',
+      'filter: drop-shadow(0 4px 10px rgba(0,0,0,0.8));',
+      'transform: rotate(-90deg);',
+    ].join(' ');
+    emojiEl.textContent = vehicleAtProgress(state, 0);
+    el.appendChild(emojiEl);
+    vehicleEmojiElRef.current = emojiEl;
 
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' });
-    if (fullRoute.length > 0) {
-      marker.setLngLat(fullRoute[0]).addTo(map);
-    }
+    marker.setLngLat(fullRoute[0]).addTo(map);
     vehicleMarkerRef.current = marker;
 
     return () => {
       if (map.getLayer('trail-line')) {
         map.setLayoutProperty('trail-line', 'visibility', 'none');
       }
-      // Clear trail
       const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
-      trailSrc?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} });
+      trailSrc?.setData({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [] },
+        properties: {},
+      });
 
       vehicleMarkerRef.current?.remove();
       vehicleMarkerRef.current = null;
+      vehicleEmojiElRef.current = null;
       cancelAnimationFrame(animFrameRef.current);
+
+      // Restore flat top-down camera
+      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
@@ -111,20 +138,20 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const prog = Math.min(elapsed / (duration * 1000), 1);
 
     setProgress(prog);
+    setKmTraveled(Math.round(prog * totalKmRef.current));
 
     const { position, bearing } = interpolateAlong(fullRoute, prog);
     const trail = sliceRoute(fullRoute, prog);
 
-    // Update vehicle marker
     const marker = vehicleMarkerRef.current;
     if (marker) {
       marker.setLngLat(position);
-      const el = marker.getElement();
-      el.style.transform = `rotate(${bearing}deg)`;
-      el.textContent = vehicleAtProgress(state, prog);
+    }
+    const emojiEl = vehicleEmojiElRef.current;
+    if (emojiEl) {
+      emojiEl.textContent = vehicleAtProgress(state, prog);
     }
 
-    // Update trail
     const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
     if (trailSrc && trail.length >= 2) {
       trailSrc.setData({
@@ -134,33 +161,51 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Camera follow
-    if (cameraFollow) {
-      map.easeTo({ center: position, duration: 80, easing: t => t });
-    }
+    // Chase camera: bearing tracks vehicle direction, pitch stays at 60°
+    map.easeTo({
+      center: position,
+      bearing,
+      pitch: 60,
+      zoom: animZoomRef.current,
+      duration: 80,
+      easing: (t) => t,
+    });
 
     if (prog < 1) {
       animFrameRef.current = requestAnimationFrame(animate);
     } else {
       setIsPlaying(false);
       startTimeRef.current = 0;
-      // Stop recording when animation ends
       if (mediaRecorderRef.current?.state === 'recording') {
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, fullRoute, duration, cameraFollow, state]);
+  }, [map, fullRoute, duration, state]);
 
   const play = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
     setProgress(0);
+    setKmTraveled(0);
     startTimeRef.current = 0;
 
-    // Reset trail
     if (map) {
       const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
-      trailSrc?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} });
+      trailSrc?.setData({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [] },
+        properties: {},
+      });
+
+      // Snap camera back to start position before replaying
+      const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+      map.easeTo({
+        center: startPos,
+        bearing: startBearing,
+        pitch: 60,
+        zoom: animZoomRef.current,
+        duration: 400,
+      });
     }
 
     setIsPlaying(true);
@@ -168,10 +213,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       startTimeRef.current = ts;
       animate(ts);
     });
-  }, [animate, map]);
+  }, [animate, map, fullRoute]);
 
-  // NOTE: no useEffect on isPlaying — the effect was cancelling the animation
-  // frame immediately after play() started it (cleanup fires on every change)
+  // NOTE: no useEffect on isPlaying — cleanup fires on every change and would
+  // cancel the animation frame immediately after play() starts it.
 
   const downloadVideo = useCallback(async () => {
     if (!map || fullRoute.length < 2) return;
@@ -221,17 +266,17 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         <h1 className="text-white font-bold text-lg tracking-wide drop-shadow-lg">
           Preview Video
         </h1>
-        <button
-          onClick={() => setCameraFollow(f => !f)}
-          className={[
-            'w-11 h-11 rounded-full backdrop-blur flex items-center justify-center text-xl shadow-lg active:scale-95 transition-all',
-            cameraFollow ? 'bg-amber text-navy' : 'bg-navy/80 text-white',
-          ].join(' ')}
-          title="Camera follow"
-        >
-          🎥
-        </button>
+        <div className="w-11" />
       </div>
+
+      {/* Distance badge */}
+      {isPlaying && (
+        <div className="flex justify-center mt-6">
+          <div className="bg-red-500 text-white font-bold text-xl px-6 py-2 rounded-full shadow-lg">
+            {kmTraveled.toLocaleString()} km
+          </div>
+        </div>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -264,7 +309,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
         {/* Action buttons */}
         <div className="flex gap-3 mb-4">
-          {/* Play / Stop */}
           <button
             onClick={isPlaying ? stopAnimation : play}
             disabled={!hasRoute}
@@ -278,7 +322,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
             {isPlaying ? '⏹ Stop' : '▶ Play'}
           </button>
 
-          {/* Download */}
           <button
             onClick={downloadVideo}
             disabled={!hasRoute || isRecording}
