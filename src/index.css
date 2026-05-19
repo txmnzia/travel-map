@@ -20,12 +20,16 @@
     overscroll-behavior: none;
   }
 
-  /* #root is the true fullscreen container — position:fixed here is relative
-     to the initial containing block (the physical screen), so it fills the
-     entire display including safe-area regions regardless of any parent CSS. */
+  /* #root fills the physical screen. height uses --app-height which is driven
+     by window.innerHeight in main.tsx — on iOS Safari with viewport-fit=cover
+     that gives the true full-screen height including safe areas, whereas CSS
+     100vh / inset:0 only reach the layout viewport and leave dark borders. */
   #root {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--app-height, 100dvh);
     overflow: hidden;
   }
 

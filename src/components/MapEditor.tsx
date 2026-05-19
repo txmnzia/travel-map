@@ -233,9 +233,15 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       window.addEventListener('resize', onResize);
       window.visualViewport?.addEventListener('resize', onResize);
 
+      // ResizeObserver fires whenever the container's pixel size changes (e.g.
+      // when --app-height updates), ensuring the MapLibre canvas is kept in sync
+      const ro = new ResizeObserver(() => map.resize());
+      if (containerRef.current) ro.observe(containerRef.current);
+
       return () => {
         window.removeEventListener('resize', onResize);
         window.visualViewport?.removeEventListener('resize', onResize);
+        ro.disconnect();
         map.remove();
         mapRef.current = null;
         mapReadyRef.current = false;
