@@ -107,8 +107,9 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const addWaypointRef = useRef(addWaypoint);
     const segmentsRef = useRef(state.segments);
     const dispatchRef = useRef(dispatch);
-    // Flag to swallow the map click when a route-line click already handled it
     const routeLineClickedRef = useRef(false);
+    // Key of the handle marker currently being dragged — used to skip setLngLat during drag
+    const draggingHandleRef = useRef<string | null>(null);
 
     // Keep refs current so stable map handlers always see fresh values
     useEffect(() => { visibleRef.current = visible; }, [visible]);
@@ -419,23 +420,28 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
       });
 
-      // For each segment, show one mid-handle (at midpoint of route)
+      // For each segment, show one handle (at control point if set, else route midpoint)
       segments.forEach(seg => {
-        const midpoint = routeMidpoint(seg.route);
         const handleKey = `${seg.id}:mid`;
+        // Visual position: use the actual control point so it stays where user dragged it
+        const handlePos: [number, number] = seg.handles.length > 0
+          ? seg.handles[0]
+          : routeMidpoint(seg.route);
 
         if (existing.has(handleKey)) {
-          existing.get(handleKey)!.setLngLat(midpoint);
+          // Don't reposition during an active drag — would reset MapLibre's drag tracking
+          if (draggingHandleRef.current !== handleKey) {
+            existing.get(handleKey)!.setLngLat(handlePos);
+          }
         } else {
           const el = createHandleEl();
           const marker = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' })
-            .setLngLat(midpoint)
+            .setLngLat(handlePos)
             .addTo(map);
 
-          // Track whether this handle has been added to state yet
-          // (avoids stale closure bug: seg.handles captured at effect-time)
           let handleAdded = seg.handles.length > 0;
 
+          marker.on('dragstart', () => { draggingHandleRef.current = handleKey; });
           marker.on('drag', () => {
             const ll = marker.getLngLat();
             if (!handleAdded) {
@@ -445,9 +451,9 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
               dispatch({ type: 'MOVE_HANDLE', segmentId: seg.id, index: 0, handle: [ll.lng, ll.lat] });
             }
           });
-          // Prevent map click when interacting with handle
-          el.addEventListener('click', e => e.stopPropagation());
+          marker.on('dragend', () => { draggingHandleRef.current = null; });
 
+          el.addEventListener('click', e => e.stopPropagation());
           existing.set(handleKey, marker);
         }
       });
