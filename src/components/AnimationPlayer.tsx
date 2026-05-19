@@ -76,6 +76,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const lastVehicleTypeRef = useRef<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const playRef = useRef<() => void>(() => {});
 
   const fullRoute = buildFullRoute(state);
 
@@ -274,6 +275,17 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       animate(ts);
     });
   }, [animate, map, fullRoute, state]);
+
+  // Keep playRef current so auto-play timer fires with latest play callback
+  useEffect(() => { playRef.current = play; }, [play]);
+
+  // Auto-play when entering preview — wait for map camera to settle first
+  useEffect(() => {
+    if (fullRoute.length < 2) return;
+    const id = setTimeout(() => playRef.current(), 800);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — fire once on mount
 
   const downloadVideo = useCallback(async () => {
     if (!map || fullRoute.length < 2) return;
