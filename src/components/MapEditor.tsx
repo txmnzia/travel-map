@@ -599,8 +599,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     return (
       <div
         ref={containerRef}
-        className="absolute inset-0"
-        style={{ visibility: 'visible' }}
+        className="absolute top-0 left-0 right-0"
+        style={{ height: '100lvh', visibility: 'visible' }}
       />
     );
   },
