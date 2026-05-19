@@ -81,6 +81,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
           fromId: fromWp.id,
           toId: toWp.id,
           vehicle: outgoing.vehicle,
+          manualVehicle: false,
           handles: [],
           route: computeRoute(
             [fromWp.lng, fromWp.lat],
@@ -123,6 +124,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         fromId: fromWp.id,
         toId: waypoint.id,
         vehicle: seg.vehicle,
+        manualVehicle: false,
         handles: [],
         route: computeRoute([fromWp.lng, fromWp.lat], [waypoint.lng, waypoint.lat], seg.vehicle, []),
       };
@@ -131,6 +133,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         fromId: waypoint.id,
         toId: toWp.id,
         vehicle: seg.vehicle,
+        manualVehicle: false,
         handles: [],
         route: computeRoute([waypoint.lng, waypoint.lat], [toWp.lng, toWp.lat], seg.vehicle, []),
       };
@@ -150,10 +153,18 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       return EMPTY;
 
     case 'SET_VEHICLE': {
-      const segments = state.segments.map(seg => {
-        if (seg.id !== action.segmentId) return seg;
-        const updated = { ...seg, vehicle: action.vehicle };
-        return recomputeSegment(updated, state.waypoints);
+      const idx = state.segments.findIndex(s => s.id === action.segmentId);
+      if (idx === -1) return state;
+
+      let blocked = false;
+      const segments = state.segments.map((seg, i) => {
+        if (i < idx) return seg;
+        if (i === idx) {
+          return recomputeSegment({ ...seg, vehicle: action.vehicle, manualVehicle: true }, state.waypoints);
+        }
+        // Propagate forward until hitting a manually-set segment
+        if (blocked || seg.manualVehicle) { blocked = true; return seg; }
+        return recomputeSegment({ ...seg, vehicle: action.vehicle }, state.waypoints);
       });
       return { ...state, segments };
     }
@@ -222,7 +233,7 @@ export function useWaypoints() {
   });
 
   const addWaypoint = useCallback(
-    (lng: number, lat: number, defaultVehicle: VehicleType = 'plane') => {
+    (lng: number, lat: number) => {
       const waypoint: Waypoint = {
         id: `wp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         lng,
@@ -233,12 +244,15 @@ export function useWaypoints() {
       let segment: Segment | undefined;
 
       if (prev) {
-        const route = computeRoute([prev.lng, prev.lat], [lng, lat], defaultVehicle, []);
+        // Inherit the last segment's vehicle so the route type stays consistent
+        const vehicle = history.present.segments.at(-1)?.vehicle ?? 'plane';
+        const route = computeRoute([prev.lng, prev.lat], [lng, lat], vehicle, []);
         segment = {
           id: `seg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           fromId: prev.id,
           toId: waypoint.id,
-          vehicle: defaultVehicle,
+          vehicle,
+          manualVehicle: false,
           handles: [],
           route,
         };
@@ -246,7 +260,7 @@ export function useWaypoints() {
 
       dispatch({ type: 'ADD_WAYPOINT', waypoint, segment });
     },
-    [history.present.waypoints],
+    [history.present.waypoints, history.present.segments],
   );
 
   return {
