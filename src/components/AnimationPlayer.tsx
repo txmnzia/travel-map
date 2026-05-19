@@ -66,6 +66,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   const vehicleMarkerRef = useRef<maplibregl.Marker | null>(null);
   const vehicleEmojiElRef = useRef<HTMLElement | null>(null);
+  const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const animZoomRef = useRef<number>(10);
@@ -94,6 +95,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (map.getLayer('trail-line')) {
       map.setLayoutProperty('trail-line', 'visibility', 'visible');
     }
+
+    // Hide all waypoint / handle markers that exist before the vehicle marker is added
+    const existingMarkerEls = Array.from(
+      map.getContainer().querySelectorAll<HTMLElement>('.maplibregl-marker'),
+    );
+    existingMarkerEls.forEach(m => { m.style.visibility = 'hidden'; });
+    hiddenMarkersRef.current = existingMarkerEls;
 
     // Set perspective camera at route start facing direction of travel
     const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
@@ -126,6 +134,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     vehicleMarkerRef.current = marker;
 
     return () => {
+      // Restore waypoint / handle markers
+      hiddenMarkersRef.current.forEach(m => { m.style.visibility = ''; });
+      hiddenMarkersRef.current = [];
+
       // Restore route layer visibility
       if (map.getLayer('routes-line')) {
         map.setLayoutProperty('routes-line', 'visibility', 'visible');
