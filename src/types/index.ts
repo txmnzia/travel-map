@@ -1,4 +1,9 @@
-export type VehicleType = 'plane' | 'car' | 'train' | 'bicycle' | 'walk';
+export type VehicleType =
+  | 'sedan' | 'suv' | 'sports-car' | 'race-car' | 'taxi' | 'truck' | 'ambulance' | 'firetruck'
+  | 'speedboat' | 'sailboat' | 'rowboat' | 'tugboat' | 'fanboat'
+  | 'cargo-ship' | 'ocean-liner' | 'pirate-ship'
+  | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
+
 export type AppMode = 'edit' | 'preview';
 export type MapStyleId = 'bright' | 'liberty' | 'positron';
 
@@ -13,6 +18,7 @@ export interface Segment {
   fromId: string;
   toId: string;
   vehicle: VehicleType;
+  manualVehicle?: boolean;
   /** User-placed bezier control handles between the two waypoints */
   handles: [number, number][];
   /** Computed polyline coordinates [lng, lat][] */
