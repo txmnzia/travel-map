@@ -129,13 +129,15 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => {
       if (!containerRef.current) return;
 
-      // Use screen.height (physical screen height in CSS px) so the canvas is
-      // always taller than any viewport measurement iOS could return. The excess
-      // is clipped by #root's overflow:hidden. This sidesteps every iOS Safari
-      // quirk around clientHeight / innerHeight / 100dvh under-reporting.
+      // Read height from the direct parent element rather than any viewport API.
+      // Viewport APIs (innerHeight, clientHeight, screen.height) are all
+      // unreliable on iOS Safari. The parent has the correct height from the
+      // -webkit-fill-available CSS chain, so offsetHeight here is authoritative.
       const applyHeight = () => {
         if (containerRef.current) {
-          containerRef.current.style.height = `${window.screen.height}px`;
+          const h = containerRef.current.parentElement?.offsetHeight
+            ?? document.documentElement.clientHeight;
+          containerRef.current.style.height = `${h}px`;
         }
       };
       applyHeight();

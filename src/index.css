@@ -9,21 +9,31 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html, body {
+  /* -webkit-fill-available is the iOS Safari fix for toolbar-aware height.
+     position:fixed;inset:0 has a confirmed regression in iOS 26.0 (gap at
+     bottom of fixed containers) fixed only in Safari 26.1 beta — so we avoid
+     it entirely and use the fill-available chain instead. */
+  html {
     margin: 0;
     padding: 0;
+    height: -webkit-fill-available;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
-  /* position:fixed;inset:0 fills the layout viewport (the full area between
-     the status bar and home indicator). This includes the area under the
-     floating Safari toolbar, so the map extends beneath it with no navy gap.
-     height:100% on html/body only gives the visual viewport (toolbar excluded),
-     which left a navy strip between the map and the Safari UI. */
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    height: -webkit-fill-available;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   #root {
-    position: fixed;
-    inset: 0;
+    position: relative;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
   }
 
