@@ -61,7 +61,7 @@ export default function App() {
   const map = mapEditorRef.current?.getMap() ?? null;
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-navy">
+    <div className="absolute inset-0 bg-navy">
 
       {/* Map (always mounted) */}
       <MapEditor

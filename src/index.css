@@ -9,13 +9,24 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html, body, #root {
-    height: 100%;
-    width: 100%;
+  /* html and body must NOT have overflow:hidden — on iOS Safari that creates a
+     scroll container which constrains position:fixed children to the layout
+     viewport (safe area only), causing dark borders under the Dynamic Island
+     and home indicator. overscroll-behavior:none prevents rubber-band without
+     creating a clipping context. */
+  html, body {
     margin: 0;
     padding: 0;
-    overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  /* #root is the true fullscreen container — position:fixed here is relative
+     to the initial containing block (the physical screen), so it fills the
+     entire display including safe-area regions regardless of any parent CSS. */
+  #root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
   }
 
   body {
