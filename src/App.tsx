@@ -73,64 +73,7 @@ export default function App() {
         visible={mode === 'edit'}
       />
 
-      {/* Edit mode overlays */}
-      {mode === 'edit' && (
-        <>
-          {/* Bottom toolbar */}
-          <Toolbar
-            canUndo={canUndo}
-            canRedo={canRedo}
-            waypointCount={state.waypoints.length}
-            onUndo={() => dispatch({ type: 'UNDO' })}
-            onRedo={() => dispatch({ type: 'REDO' })}
-            onPlay={enterPreview}
-            onClear={() => dispatch({ type: 'CLEAR_ALL' })}
-            onStylePicker={() => setShowStylePicker(true)}
-            onMenu={() => setShowMenu(true)}
-          />
-
-          {/* Vehicle selector bottom sheet */}
-          {vehicleSelector && (
-            <VehicleSelector
-              segmentId={vehicleSelector.segmentId}
-              current={vehicleSelector.vehicle}
-              onSelect={(segmentId, vehicle) =>
-                dispatch({ type: 'SET_VEHICLE', segmentId, vehicle })
-              }
-              onClose={() => setVehicleSelector(null)}
-            />
-          )}
-
-          {/* Map style picker */}
-          {showStylePicker && (
-            <MapStylePicker
-              current={mapStyle}
-              onChange={setMapStyle}
-              onClose={() => setShowStylePicker(false)}
-            />
-          )}
-
-          {/* Burger menu drawer */}
-          {showMenu && (
-            <MenuDrawer
-              currentStyle={mapStyle}
-              hasWaypoints={state.waypoints.length > 0}
-              onClose={() => setShowMenu(false)}
-              onStyleChange={setMapStyle}
-              onClearAll={() => dispatch({ type: 'CLEAR_ALL' })}
-            />
-          )}
-        </>
-      )}
-
-      {/* Preview mode overlays */}
-      {mode === 'preview' && (
-        <AnimationPlayer
-          map={map}
-          state={state}
-          onBack={exitPreview}
-        />
-      )}
+      {/* UI hidden for diagnostic — testing map-only full-screen */}
     </div>
   );
 }
