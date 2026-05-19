@@ -174,8 +174,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
           paint: {
             'line-color': '#ef4444',
-            'line-width': 3,
-            'line-dasharray': [2, 3],
+            'line-width': 4,
           },
         } as maplibregl.LayerSpecification);
 
@@ -277,7 +276,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
             type: 'line',
             source: 'trail',
             layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
-            paint: { 'line-color': '#ef4444', 'line-width': 3, 'line-dasharray': [2, 3] },
+            paint: { 'line-color': '#ef4444', 'line-width': 4 },
           } as maplibregl.LayerSpecification);
         }
       });
