@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
 
@@ -9,31 +10,63 @@ interface Props {
 }
 
 export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props) {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const swipeStartY = useRef(0);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // Native (non-React) touch listeners on the header so swipe-down is reliable
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const onStart = (e: TouchEvent) => {
+      e.stopPropagation();
+      swipeStartY.current = e.touches[0].clientY;
+    };
+    const onEnd = (e: TouchEvent) => {
+      e.stopPropagation();
+      if (e.changedTouches[0].clientY - swipeStartY.current > 50) {
+        onCloseRef.current();
+      }
+    };
+
+    header.addEventListener('touchstart', onStart, { passive: true });
+    header.addEventListener('touchend', onEnd);
+    return () => {
+      header.removeEventListener('touchstart', onStart);
+      header.removeEventListener('touchend', onEnd);
+    };
+  }, []);
+
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — above toolbar (z-50) */}
       <div
-        className="absolute inset-0 z-30"
+        className="absolute inset-0 z-[55]"
         onClick={onClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       />
 
-      {/* Bottom sheet */}
+      {/* Bottom sheet — above backdrop */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-40 bg-navy rounded-t-3xl pb-safe"
+        className="absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe"
         onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        onTouchMove={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-center pt-3 pb-2">
-          <div className="w-10 h-1 rounded-full bg-white/20" />
+        {/* Swipeable header */}
+        <div ref={headerRef} className="cursor-grab">
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-white/30" />
+          </div>
+          <h2 className="text-white text-center font-bold text-lg tracking-wide py-2 px-4">
+            CHOOSE TRANSPORT
+          </h2>
         </div>
 
-        <h2 className="text-white text-center font-bold text-lg tracking-wide mb-3 px-4">
-          CHOOSE TRANSPORT
-        </h2>
-
-        <div className="overflow-y-auto max-h-[60vh] px-4 pb-6">
+        {/* Scrollable vehicle grid */}
+        <div className="overflow-y-auto max-h-[72vh] px-4 pb-4">
           {VEHICLE_CATEGORIES.map(cat => {
             const vehicles = VEHICLES.filter(v => v.category === cat);
             return (
