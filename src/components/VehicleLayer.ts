@@ -4,11 +4,13 @@ import maplibregl from 'maplibre-gl';
 
 /**
  * MapLibre custom layer that renders a GLTF/GLB vehicle model in 3D map space.
- * The model is positioned at a geographic coordinate and rotated to face a bearing.
  *
- * Not typed as `implements CustomLayerInterface` because MapLibre v4 uses gl-matrix's
- * `mat4` (an IndexedCollection) for the render matrix, which doesn't extend number[].
- * We accept the layer as `unknown` at the map.addLayer call site instead.
+ * Scale is computed per-frame to maintain a consistent ~80 CSS-pixel apparent
+ * width at any zoom level, so the vehicle is always clearly visible whether the
+ * camera is watching a 10 km route or a 5 000 km route.
+ *
+ * Each loaded model is normalised to a 1-unit bounding box so the pixel-size
+ * math works the same regardless of how the original GLB was scaled.
  */
 export class VehicleLayer {
   readonly id = 'vehicle-layer';
@@ -22,7 +24,9 @@ export class VehicleLayer {
   private model: THREE.Object3D | null = null;
   private readonly loader = new GLTFLoader();
   private loadingUrl = '';
-  private scaleMeters = 30;
+
+  /** Multiplier on top of the base 80 px target — larger vehicles can use >1 */
+  scaleFactor = 1;
 
   position: [number, number] = [0, 0];
   bearing = 0;
@@ -40,16 +44,15 @@ export class VehicleLayer {
     this.renderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: gl as WebGL2RenderingContext,
-      antialias: true,
     });
     this.renderer.autoClear = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
-  loadModel(url: string, scaleMeters: number) {
+  loadModel(url: string, scaleFactor = 1) {
     if (url === this.loadingUrl) return;
     this.loadingUrl = url;
-    this.scaleMeters = scaleMeters;
+    this.scaleFactor = scaleFactor;
 
     if (this.model) {
       this.scene.remove(this.model);
@@ -60,7 +63,20 @@ export class VehicleLayer {
       url,
       (gltf) => {
         if (this.loadingUrl !== url) return; // superseded by a newer loadModel call
-        this.model = gltf.scene;
+        const model = gltf.scene;
+
+        // Normalise to a 1-unit bounding box so the pixel-size formula is predictable
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) model.scale.setScalar(1 / maxDim);
+
+        // Centre horizontally; keep the model base at y=0
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.x -= center.x / maxDim;
+        model.position.z -= center.z / maxDim;
+
+        this.model = model;
         this.scene.add(this.model);
         this.map?.triggerRepaint();
       },
@@ -69,7 +85,7 @@ export class VehicleLayer {
     );
   }
 
-  // matrix is MapLibre's mat4 (IndexedCollection / Float32Array at runtime)
+  // matrix is MapLibre's mat4 — Float32Array at runtime, typed as IndexedCollection in v4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   render(_gl: unknown, matrix: any) {
     if (!this.model) return;
@@ -79,13 +95,18 @@ export class VehicleLayer {
       0,
     );
 
-    const s = coord.meterInMercatorCoordinateUnits() * this.scaleMeters;
+    // Zoom-adaptive scale: always appear ~80 CSS pixels wide regardless of zoom.
+    // Formula: at zoom Z with tile size 512, 1 px ≈ 40 075 017 / (512 × 2^Z) metres.
+    const zoom = this.map.getZoom();
+    const metersPerPx = 40_075_017 / (512 * Math.pow(2, zoom));
+    const desiredMeters = 80 * metersPerPx * this.scaleFactor;
+    const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
-    // Build model-to-world matrix:
+    // Model-to-clip matrix:
     // 1. Translate to Mercator position
     // 2. Scale (Y flipped — Mercator Y increases southward)
-    // 3. rotateX(PI/2): lay model flat (GLTF is Y-up, map ground is XY)
-    // 4. rotateY: bearing. MapLibre bearing is CW from N; Three.js Y is CCW → negate.
+    // 3. rotateX(π/2): lay model flat (GLTF Y-up → map XZ ground plane)
+    // 4. rotateY(-bearing): orient to face direction of travel
     const bearingRad = -this.bearing * (Math.PI / 180);
     const modelMatrix = new THREE.Matrix4()
       .makeTranslation(coord.x, coord.y, coord.z ?? 0)
@@ -94,8 +115,8 @@ export class VehicleLayer {
       .multiply(new THREE.Matrix4().makeRotationY(bearingRad));
 
     this.camera.projectionMatrix = new THREE.Matrix4()
-      .fromArray(Array.from(matrix) as number[])
-      .multiply(modelMatrix);
+      .fromArray(matrix)          // MapLibre view-projection matrix
+      .multiply(modelMatrix);     // × local model transform
 
     this.renderer.resetState();
     this.renderer.render(this.scene, this.camera);

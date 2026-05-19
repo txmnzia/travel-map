@@ -115,7 +115,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (firstSeg) {
       const cfg = getVehicle(firstSeg.vehicle);
       layer.position = fullRoute[0];
-      layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleMeters);
+      layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleFactor);
       lastVehicleTypeRef.current = firstSeg.vehicle;
     }
 
@@ -195,7 +195,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       const seg = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
-        layer.loadModel(vehicleModelUrl(seg.vehicle), cfg.scaleMeters);
+        layer.loadModel(vehicleModelUrl(seg.vehicle), cfg.scaleFactor);
         lastVehicleTypeRef.current = seg.vehicle;
       }
     }
@@ -263,7 +263,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.position = fullRoute[0];
         layer.bearing = startBearing;
         const cfg = getVehicle(firstSeg.vehicle);
-        layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleMeters);
+        layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleFactor);
         lastVehicleTypeRef.current = firstSeg.vehicle;
       }
     }
