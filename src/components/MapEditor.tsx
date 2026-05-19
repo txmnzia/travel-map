@@ -129,6 +129,18 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => {
       if (!containerRef.current) return;
 
+      // Set an explicit pixel height BEFORE MapLibre reads container.offsetHeight.
+      // CSS units (100%, 100lvh, etc.) can be misread on iOS Safari — offsetHeight
+      // may return the visual viewport height instead of the layout viewport height,
+      // leaving a navy gap below the canvas. An explicit px value cannot be
+      // misreported: offsetHeight always equals the inline style pixel value.
+      const applyHeight = () => {
+        if (containerRef.current) {
+          containerRef.current.style.height = `${document.documentElement.clientHeight}px`;
+        }
+      };
+      applyHeight();
+
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: getStyleUrl(mapStyle),
@@ -229,7 +241,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
       // Resize on window resize (orientation change) and visualViewport resize
       // (iOS Safari URL bar show/hide — window.resize does NOT fire for that)
-      const onResize = () => map.resize();
+      const onResize = () => { applyHeight(); map.resize(); };
       window.addEventListener('resize', onResize);
       window.visualViewport?.addEventListener('resize', onResize);
 
@@ -600,7 +612,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       <div
         ref={containerRef}
         className="absolute top-0 left-0 right-0"
-        style={{ height: '100lvh', visibility: 'visible' }}
+        style={{ visibility: 'visible' }}
       />
     );
   },
