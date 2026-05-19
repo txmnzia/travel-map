@@ -129,19 +129,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => {
       if (!containerRef.current) return;
 
-      // Read height from the direct parent element rather than any viewport API.
-      // Viewport APIs (innerHeight, clientHeight, screen.height) are all
-      // unreliable on iOS Safari. The parent has the correct height from the
-      // -webkit-fill-available CSS chain, so offsetHeight here is authoritative.
-      const applyHeight = () => {
-        if (containerRef.current) {
-          const h = containerRef.current.parentElement?.offsetHeight
-            ?? document.documentElement.clientHeight;
-          containerRef.current.style.height = `${h}px`;
-        }
-      };
-      applyHeight();
-
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: getStyleUrl(mapStyle),
@@ -242,7 +229,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
       // Resize on window resize (orientation change) and visualViewport resize
       // (iOS Safari URL bar show/hide — window.resize does NOT fire for that)
-      const onResize = () => { applyHeight(); map.resize(); };
+      const onResize = () => map.resize();
       window.addEventListener('resize', onResize);
       window.visualViewport?.addEventListener('resize', onResize);
 
@@ -612,7 +599,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     return (
       <div
         ref={containerRef}
-        className="absolute top-0 left-0 right-0"
+        className="absolute inset-0"
         style={{ visibility: 'visible' }}
       />
     );
