@@ -5,7 +5,7 @@ export type VehicleType =
   | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
 
 export type AppMode = 'edit' | 'preview';
-export type MapStyleId = 'bright' | 'liberty' | 'positron';
+export type MapStyleId = 'bright' | 'liberty' | 'positron' | 'dark-matter' | 'voyager';
 
 export interface Waypoint {
   id: string;
