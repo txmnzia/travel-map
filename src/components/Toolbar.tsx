@@ -33,7 +33,7 @@ export function Toolbar({
         </div>
       )}
 
-      <div className="bg-navy/75 backdrop-blur-md border-t border-white/10 pb-safe pointer-events-auto">
+      <div className="bg-navy border-t border-white/10 pb-safe pointer-events-auto">
         <div className="flex items-center justify-center gap-3 px-4 py-2">
 
           <button
