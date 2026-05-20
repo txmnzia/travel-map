@@ -9,10 +9,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* -webkit-fill-available is the iOS Safari fix for toolbar-aware height.
-     position:fixed;inset:0 has a confirmed regression in iOS 26.0 (gap at
-     bottom of fixed containers) fixed only in Safari 26.1 beta — so we avoid
-     it entirely and use the fill-available chain instead. */
   html {
     margin: 0;
     padding: 0;
@@ -30,10 +26,14 @@
     overscroll-behavior: none;
   }
 
+  /* 100dvh bypasses the %-inheritance issue: iOS Safari does not treat
+     -webkit-fill-available on body as a definite height, so height:100%
+     on #root resolves to 0, clipping everything via overflow:hidden.
+     dvh is viewport-relative and always resolves to the correct value. */
   #root {
     position: relative;
     width: 100%;
-    height: 100%;
+    height: 100dvh;
     overflow: hidden;
   }
 
