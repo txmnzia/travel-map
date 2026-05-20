@@ -103,7 +103,7 @@ export function MapStylePicker({ current, onChange, onClose }: Props) {
             MAP STYLE
           </h2>
         </div>
-        <div className="flex gap-3 px-4 pb-6 justify-center">
+        <div className="flex gap-3 px-4 pb-4 justify-center">
           {MAP_STYLES.map(style => (
             <button
               key={style.id}
@@ -120,6 +120,7 @@ export function MapStylePicker({ current, onChange, onClose }: Props) {
             </button>
           ))}
         </div>
+        <p className="text-white/20 text-xs text-center pb-4">v20260520-6</p>
       </div>
     </>
   );
