@@ -53,14 +53,14 @@
   }
 }
 
-/* Long-press ring animation — only animates box-shadow so it never conflicts
-   with MapLibre's inline transform: translate(X,Y) that positions the marker */
+/* Long-press ring animation — pulses white rings outward while the finger is held.
+   Box-shadow only: never conflicts with MapLibre's inline transform:translate(X,Y). */
 @keyframes lp-ring {
-  0%   { box-shadow: 0 0 0 0   rgba(245,166,35,0.9),  0 2px 8px rgba(0,0,0,0.35); }
-  100% { box-shadow: 0 0 0 22px rgba(245,166,35,0),   0 2px 8px rgba(0,0,0,0.35); }
+  0%   { box-shadow: 0 0 0 0px  rgba(255,255,255,0.85), 0 2px 8px rgba(0,0,0,0.35); }
+  100% { box-shadow: 0 0 0 22px rgba(255,255,255,0),    0 2px 8px rgba(0,0,0,0.35); }
 }
 .waypoint-pressing {
-  animation: lp-ring 0.55s ease-out forwards;
+  animation: lp-ring 0.35s ease-out infinite;
   cursor: grab;
 }
 
