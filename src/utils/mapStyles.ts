@@ -26,6 +26,18 @@ export const MAP_STYLES: MapStyleConfig[] = [
     url: 'https://tiles.openfreemap.org/styles/positron',
     thumbnail: '☁️',
   },
+  {
+    id: 'dark-matter',
+    label: 'Dark',
+    url: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    thumbnail: '🌑',
+  },
+  {
+    id: 'voyager',
+    label: 'Voyager',
+    url: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+    thumbnail: '🧭',
+  },
 ];
 
 export function getStyleUrl(id: MapStyleId): string {
