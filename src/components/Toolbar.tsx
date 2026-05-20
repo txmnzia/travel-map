@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 interface Props {
   canUndo: boolean;
   canRedo: boolean;
@@ -7,6 +9,7 @@ interface Props {
   onPlay: () => void;
   onClear: () => void;
   onStylePicker: () => void;
+  onImport: (file: File) => void;
 }
 
 export function Toolbar({
@@ -18,7 +21,9 @@ export function Toolbar({
   onPlay,
   onClear,
   onStylePicker,
+  onImport,
 }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const canPlay = waypointCount >= 2;
 
   const btnBase = 'w-12 h-12 rounded-full bg-white/15 flex items-center justify-center text-xl shadow transition-all active:scale-90';
@@ -60,7 +65,25 @@ export function Toolbar({
           <div className="w-16 shrink-0" aria-hidden="true" />
 
           <button onClick={onStylePicker} className={btnBase} aria-label="Map style">🗺️</button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className={btnBase}
+            aria-label="Import GPX"
+          >
+            📂
+          </button>
           <button onClick={onClear} disabled={waypointCount === 0} className={`${btnBase} disabled:opacity-30`} aria-label="Clear all">🗑</button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".gpx,application/gpx+xml,text/xml"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) onImport(file);
+              e.target.value = '';
+            }}
+          />
         </div>
       </div>
     </div>
