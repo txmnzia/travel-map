@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import maplibregl from 'maplibre-gl';
 
+const textureLoader = new THREE.TextureLoader();
+
 function easeOutBack(t: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
@@ -193,8 +195,10 @@ export class VehicleLayer {
 
   /** Load multiple GLB parts and assemble them into a single train.
    *  All parts are normalised to the first part's scale so relative
-   *  proportions are preserved, then chained end-to-end along -Z. */
-  loadParts(urls: string[], scaleFactor = 1) {
+   *  proportions are preserved, then chained end-to-end along -Z.
+   *  colormapUrl is injected into every material so external texture atlases
+   *  (not embedded in the GLB) are applied correctly. */
+  loadParts(urls: string[], scaleFactor = 1, colormapUrl?: string) {
     const key = 'parts:' + urls.join('\n');
     if (key === this.loadingUrl) return;
     this.loadingUrl = key;
@@ -207,11 +211,21 @@ export class VehicleLayer {
       this.model = null;
     }
 
-    Promise.all(
-      urls.map(url => new Promise<THREE.Group>((resolve, reject) =>
-        this.loader.load(url, gltf => resolve(gltf.scene), undefined, reject),
-      )),
-    ).then(parts => {
+    const glbPromises = urls.map(url => new Promise<THREE.Group>((resolve, reject) =>
+      this.loader.load(url, gltf => resolve(gltf.scene), undefined, reject),
+    ));
+
+    const texPromise = colormapUrl
+      ? new Promise<THREE.Texture>((resolve, reject) =>
+          textureLoader.load(colormapUrl, tex => {
+            tex.flipY = false;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            resolve(tex);
+          }, undefined, reject),
+        )
+      : Promise.resolve(null);
+
+    Promise.all([Promise.all(glbPromises), texPromise] as const).then(([parts, colormap]) => {
       if (this.loadingUrl !== key) return;
 
       // Normalise all parts to the first part's (loco) scale
@@ -230,10 +244,13 @@ export class VehicleLayer {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              m.side = THREE.FrontSide;
-              m.transparent = false;
-              m.depthWrite = true;
-              (m as THREE.MeshStandardMaterial).alphaTest = 0.1;
+              const mat = m as THREE.MeshStandardMaterial;
+              if (colormap) mat.map = colormap;
+              mat.side = THREE.FrontSide;
+              mat.transparent = false;
+              mat.depthWrite = true;
+              mat.alphaTest = 0.1;
+              mat.needsUpdate = true;
             });
           }
         });
