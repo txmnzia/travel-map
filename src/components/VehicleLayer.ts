@@ -12,19 +12,20 @@ function easeOutBack(t: number): number {
 }
 
 interface TrainPart {
-  group: THREE.Group; // independent scene object, matrixAutoUpdate = false
+  group: THREE.Group; // at scene origin; camera matrix encodes per-part world transform
   zOffset: number;    // distance behind loco center in normalised model units (positive = behind)
 }
 
 /**
  * MapLibre custom layer that renders a GLTF/GLB vehicle model in 3D map space.
  *
- * Single-vehicle mode: one wrapper Group; camera matrix = mapMatrix * modelMatrix.
+ * Single-vehicle mode: one render pass, camera = mapMatrix × modelMatrix.
  *
- * Multi-part train mode: each wagon is its own Group with matrixAutoUpdate=false.
- * camera.projectionMatrix = mapMatrix (bare), each group's own matrix encodes its
- * individual Mercator position + bearing, looked up per-frame from the route.
- * This lets every wagon follow the track curvature at its own delay.
+ * Multi-part train mode: one render pass PER part, each part isolated with
+ * group.visible while camera = mapMatrix × partModelMatrix. This reuses the
+ * proven single-model approach so depth/blend state is identical. Each
+ * part's modelMatrix is looked up from the route at its own lag offset,
+ * so rear wagons follow curves later — like a real train.
  */
 export class VehicleLayer {
   readonly id = 'vehicle-layer';
@@ -57,7 +58,7 @@ export class VehicleLayer {
   bearing = 0;
   bobEnabled = false;
 
-  // Route for train articulation — set by AnimationPlayer
+  // Route for train articulation — set by AnimationPlayer each frame
   route: [number, number][] = [];
   totalKm = 0;
   progress = 0;
@@ -146,7 +147,6 @@ export class VehicleLayer {
     this.scaleFactor = scaleFactor;
 
     this._clearTrainParts();
-    // Remove any single model immediately (rendering modes are incompatible)
     if (this.outgoing) { this.scene.remove(this.outgoing); this.outgoing = null; }
     if (this.model) { this.scene.remove(this.model); this.model = null; }
 
@@ -171,8 +171,8 @@ export class VehicleLayer {
       const firstSize = firstBox.getSize(new THREE.Vector3());
       const scale = 1 / Math.max(firstSize.x, firstSize.y, firstSize.z, 0.001);
 
-      const GAP = 0.03; // gap between cars as a fraction of loco length
-      let zCursor = 0;  // back edge of last placed part (positive = distance behind loco center)
+      const GAP = 0.03;
+      let zCursor = 0;
 
       const newParts: TrainPart[] = parts.map((part, i) => {
         part.scale.setScalar(scale);
@@ -192,13 +192,12 @@ export class VehicleLayer {
           }
         });
 
-        // Bounding box at applied scale, part still at origin
         const box = new THREE.Box3().setFromObject(part);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
         const halfZ = size.z / 2;
 
-        // Centre each part around its own group origin
+        // Centre each part at its group's local origin
         part.position.x = -center.x;
         part.position.z = -center.z;
 
@@ -211,8 +210,8 @@ export class VehicleLayer {
           zCursor = zOffset + halfZ;
         }
 
+        // Each group sits at scene origin; the camera matrix carries the world transform
         const group = new THREE.Group();
-        group.matrixAutoUpdate = false;
         group.add(part);
         this.scene.add(group);
 
@@ -250,8 +249,10 @@ export class VehicleLayer {
     const mapMatrix = new THREE.Matrix4().fromArray(matrix);
 
     if (hasTrain) {
-      // ── Multi-part train ─────────────────────────────────────────────────
-      // camera = bare map projection; each group carries its own world matrix
+      // ── Multi-part train: one render pass per part ──────────────────────
+      // Each pass isolates one group (others hidden) and uses
+      // camera = mapMatrix × partModelMatrix — same as the single-model path,
+      // so depth/blend/stencil state is guaranteed correct.
 
       let animScale = 1;
       if (this.trainAnimStart > 0) {
@@ -280,23 +281,28 @@ export class VehicleLayer {
 
         const pCoord = maplibregl.MercatorCoordinate.fromLngLat({ lng: pos[0], lat: pos[1] }, 0);
         const ps = pCoord.meterInMercatorCoordinateUnits() * desiredMeters * animScale;
-
-        const bobAmt = this.bobEnabled
-          ? Math.sin(now * 0.00785 + i * 0.8) * 0.05 * ps : 0;
+        const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785 + i * 0.8) * 0.05 * ps : 0;
         const bearingRad = (-bear + 180) * (Math.PI / 180);
 
-        const mat = new THREE.Matrix4()
+        const partModelMatrix = new THREE.Matrix4()
           .makeTranslation(pCoord.x, pCoord.y, (pCoord.z ?? 0) + bobAmt)
           .multiply(new THREE.Matrix4().makeScale(ps, -ps, ps))
           .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))
           .multiply(new THREE.Matrix4().makeRotationY(bearingRad))
           .multiply(new THREE.Matrix4().makeRotationZ(this.leanAngles[i]));
 
-        group.matrix.copy(mat);
-        group.matrixWorldNeedsUpdate = true;
+        this.camera.projectionMatrix = new THREE.Matrix4()
+          .copy(mapMatrix)
+          .multiply(partModelMatrix);
+
+        // Isolate this part for the render pass
+        this.trainParts.forEach((p, j) => { p.group.visible = j === i; });
+        this.renderer.resetState();
+        this.renderer.render(this.scene, this.camera);
       });
 
-      this.camera.projectionMatrix = mapMatrix;
+      // Restore visibility
+      this.trainParts.forEach(p => { p.group.visible = true; });
 
     } else {
       // ── Single model ─────────────────────────────────────────────────────
@@ -306,7 +312,6 @@ export class VehicleLayer {
         this.outgoing.scale.setScalar(1 - t);
         if (t >= 1) { this.scene.remove(this.outgoing); this.outgoing = null; }
       }
-
       if (this.model && this.modelAnimStart > 0) {
         const t = Math.min((now - this.modelAnimStart) / 280, 1);
         this.model.scale.setScalar(Math.max(0, easeOutBack(t)));
@@ -317,7 +322,6 @@ export class VehicleLayer {
         { lng: this.position[0], lat: this.position[1] }, 0,
       );
       const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
-
       const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785) * 0.05 * s : 0;
 
       let bearingDelta = this.bearing - this.prevBearing;
@@ -338,10 +342,11 @@ export class VehicleLayer {
       this.camera.projectionMatrix = new THREE.Matrix4()
         .copy(mapMatrix)
         .multiply(modelMatrix);
+
+      this.renderer.resetState();
+      this.renderer.render(this.scene, this.camera);
     }
 
-    this.renderer.resetState();
-    this.renderer.render(this.scene, this.camera);
     this.map.triggerRepaint();
   }
 
