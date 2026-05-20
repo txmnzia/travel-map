@@ -64,17 +64,19 @@ function createWaypointEl(
 
   el.style.width = '42px';
   el.style.height = '42px';
-  el.style.boxSizing = 'border-box';
   el.style.borderRadius = '50%';
   el.style.background = '#f5a623';
   el.style.border = '3px solid white';
   el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.35)';
-  el.style.position = 'relative';
+  el.style.display = 'flex';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.overflow = 'hidden';
 
   const emoji = !vehicle ? '📍' : vehicleChanged ? vehicle.emoji : null;
   if (emoji) {
     const inner = document.createElement('span');
-    inner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;line-height:1;pointer-events:none;';
+    inner.style.cssText = 'font-size:20px;line-height:1;display:block;pointer-events:none;';
     inner.textContent = emoji;
     el.appendChild(inner);
   }
