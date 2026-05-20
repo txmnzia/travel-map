@@ -11,28 +11,40 @@ interface Props {
 
 export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props) {
   const headerRef = useRef<HTMLDivElement>(null);
-  const swipeStartY = useRef(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
-  // Entry/exit animation state
-  const [isVisible, setIsVisible] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+  const [backdropVisible, setBackdropVisible] = useState(false);
+  const swipeStartY = useRef(0);
+  const swipeDY = useRef(0);
 
+  // Slide up on mount
   useEffect(() => {
-    const id = requestAnimationFrame(() => setIsVisible(true));
+    const id = requestAnimationFrame(() => {
+      setBackdropVisible(true);
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0.72, 0, 1)';
+        sheetRef.current.style.transform = 'translateY(0)';
+      }
+    });
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const handleClose = useCallback(() => {
-    setIsClosing(true);
+  // Slide down then unmount
+  const animateClose = useCallback(() => {
+    setBackdropVisible(false);
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = 'transform 280ms ease-in';
+      sheetRef.current.style.transform = 'translateY(100%)';
+    }
     setTimeout(() => onCloseRef.current(), 280);
   }, []);
 
-  const handleCloseRef = useRef(handleClose);
-  useEffect(() => { handleCloseRef.current = handleClose; }, [handleClose]);
+  const animateCloseRef = useRef(animateClose);
+  useEffect(() => { animateCloseRef.current = animateClose; }, [animateClose]);
 
-  // Native (non-React) touch listeners on the header so swipe-down is reliable
+  // Drag-to-dismiss: sheet follows finger; commits close at 80px threshold
   useEffect(() => {
     const header = headerRef.current;
     if (!header) return;
@@ -40,41 +52,58 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
     const onStart = (e: TouchEvent) => {
       e.stopPropagation();
       swipeStartY.current = e.touches[0].clientY;
+      swipeDY.current = 0;
+      if (sheetRef.current) sheetRef.current.style.transition = 'none';
     };
+
+    const onMove = (e: TouchEvent) => {
+      e.stopPropagation();
+      const dy = Math.max(0, e.touches[0].clientY - swipeStartY.current);
+      swipeDY.current = dy;
+      if (sheetRef.current) sheetRef.current.style.transform = `translateY(${dy}px)`;
+    };
+
     const onEnd = (e: TouchEvent) => {
       e.stopPropagation();
-      if (e.changedTouches[0].clientY - swipeStartY.current > 50) {
-        handleCloseRef.current();
+      if (swipeDY.current > 80) {
+        animateCloseRef.current();
+      } else {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = 'transform 200ms ease-out';
+          sheetRef.current.style.transform = 'translateY(0)';
+        }
       }
     };
 
     header.addEventListener('touchstart', onStart, { passive: true });
+    header.addEventListener('touchmove', onMove, { passive: true });
     header.addEventListener('touchend', onEnd);
     return () => {
       header.removeEventListener('touchstart', onStart);
+      header.removeEventListener('touchmove', onMove);
       header.removeEventListener('touchend', onEnd);
     };
   }, []);
 
-  const shown = isVisible && !isClosing;
-
   return (
     <>
-      {/* Backdrop — fades in/out */}
+      {/* Backdrop */}
       <div
-        className={`absolute inset-0 z-[55] transition-opacity duration-[280ms] ${shown ? 'opacity-100' : 'opacity-0'}`}
-        onClick={handleClose}
+        className={`absolute inset-0 z-[55] transition-opacity duration-300 ${backdropVisible ? 'opacity-100' : 'opacity-0'}`}
+        onClick={animateClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       />
 
-      {/* Bottom sheet — slides up on enter, slides down on exit */}
+      {/* Bottom sheet — starts off-screen; enter effect slides it up */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe transition-transform duration-[280ms] ${isClosing ? 'ease-in' : 'ease-out'} ${shown ? 'translate-y-0' : 'translate-y-full'}`}
+        ref={sheetRef}
+        style={{ transform: 'translateY(100%)' }}
+        className="absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe"
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
-        {/* Swipeable header */}
+        {/* Drag handle + title */}
         <div ref={headerRef} className="cursor-grab">
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-white/30" />
@@ -97,10 +126,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
                     return (
                       <button
                         key={v.type}
-                        onClick={() => {
-                          onSelect(segmentId, v.type);
-                          handleClose();
-                        }}
+                        onClick={() => { onSelect(segmentId, v.type); animateClose(); }}
                         className={[
                           'flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95',
                           selected
