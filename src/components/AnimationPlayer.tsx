@@ -375,8 +375,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
       {/* Bottom controls */}
       <div className="pointer-events-auto bg-navy/80 backdrop-blur-md rounded-t-2xl px-5 pt-4 pb-safe">
-        <div className="flex gap-4 mb-3">
-          <div className="flex-1 flex flex-col gap-1">
+        <div className="flex gap-4 mb-4">
+          <div className="flex-1 flex flex-col gap-2.5">
             <div className="flex justify-between">
               <span className="text-white/60 text-xs">Video length</span>
               <span className="text-white font-bold text-xs">{duration}s</span>
@@ -388,11 +388,11 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               step={1}
               value={duration}
               onChange={e => setDuration(Number(e.target.value))}
-              className="w-full h-1.5 accent-amber"
+              className="w-full h-2 accent-amber"
               disabled={isPlaying}
             />
           </div>
-          <div className="flex-1 flex flex-col gap-1">
+          <div className="flex-1 flex flex-col gap-2.5">
             <div className="flex justify-between">
               <span className="text-white/60 text-xs">Model size</span>
               <span className="text-white font-bold text-xs">{userScale.toFixed(1)}×</span>
@@ -404,7 +404,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               step={0.1}
               value={userScale}
               onChange={e => setUserScale(Number(e.target.value))}
-              className="w-full h-1.5 accent-amber"
+              className="w-full h-2 accent-amber"
             />
           </div>
         </div>
