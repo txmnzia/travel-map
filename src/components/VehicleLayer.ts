@@ -191,6 +191,81 @@ export class VehicleLayer {
     this.map.triggerRepaint();
   }
 
+  /** Load multiple GLB parts and assemble them into a single train.
+   *  All parts are normalised to the first part's scale so relative
+   *  proportions are preserved, then chained end-to-end along -Z. */
+  loadParts(urls: string[], scaleFactor = 1) {
+    const key = 'parts:' + urls.join('\n');
+    if (key === this.loadingUrl) return;
+    this.loadingUrl = key;
+    this.scaleFactor = scaleFactor;
+
+    if (this.model) {
+      if (this.outgoing) this.scene.remove(this.outgoing);
+      this.outgoing = this.model;
+      this.outgoingAnimStart = performance.now();
+      this.model = null;
+    }
+
+    Promise.all(
+      urls.map(url => new Promise<THREE.Group>((resolve, reject) =>
+        this.loader.load(url, gltf => resolve(gltf.scene), undefined, reject),
+      )),
+    ).then(parts => {
+      if (this.loadingUrl !== key) return;
+
+      // Normalise all parts to the first part's (loco) scale
+      const firstBox = new THREE.Box3().setFromObject(parts[0]);
+      const firstSize = firstBox.getSize(new THREE.Vector3());
+      const scale = 1 / Math.max(firstSize.x, firstSize.y, firstSize.z, 0.001);
+
+      const wrapper = new THREE.Group();
+      const GAP = 0.03; // gap between cars as a fraction of loco size
+      let zCursor = 0;  // back edge of the last placed part
+
+      parts.forEach((part, i) => {
+        part.scale.setScalar(scale);
+
+        part.traverse(child => {
+          if (child instanceof THREE.Mesh) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => {
+              m.side = THREE.FrontSide;
+              m.transparent = false;
+              m.depthWrite = true;
+              (m as THREE.MeshStandardMaterial).alphaTest = 0.1;
+            });
+          }
+        });
+
+        // Bounding box at applied scale (position still at origin)
+        const box = new THREE.Box3().setFromObject(part);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const halfZ = size.z / 2;
+
+        part.position.x = -center.x; // centre on X axis
+
+        if (i === 0) {
+          part.position.z = -center.z; // loco centred at Z=0
+          zCursor = -halfZ;
+        } else {
+          const desiredCenter = zCursor - GAP - halfZ;
+          part.position.z = desiredCenter - center.z;
+          zCursor = desiredCenter - halfZ;
+        }
+
+        wrapper.add(part);
+      });
+
+      wrapper.scale.setScalar(0);
+      this.model = wrapper;
+      this.modelAnimStart = performance.now();
+      this.scene.add(wrapper);
+      this.map?.triggerRepaint();
+    }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
+  }
+
   onRemove() {
     if (this.model) this.scene.remove(this.model);
     if (this.outgoing) this.scene.remove(this.outgoing);
