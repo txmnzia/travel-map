@@ -88,8 +88,9 @@ export class VehicleLayer {
         glbScene.position.x -= center.x / maxDim;
         glbScene.position.z -= center.z / maxDim;
 
-        // Force opaque front-side rendering: prevents back-face halos and
-        // alpha-blending artefacts when compositing over MapLibre's canvas
+        // Opaque front-side rendering with alpha-test clipping:
+        // alphaTest=0.1 discards near-transparent edge pixels (the "halo")
+        // without enabling blending, so depth sorting stays correct.
         glbScene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -97,7 +98,7 @@ export class VehicleLayer {
               m.side = THREE.FrontSide;
               m.transparent = false;
               m.depthWrite = true;
-              (m as THREE.MeshStandardMaterial).alphaTest = 0;
+              (m as THREE.MeshStandardMaterial).alphaTest = 0.1;
             });
           }
         });
