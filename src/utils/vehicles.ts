@@ -1,6 +1,6 @@
 import { VehicleType } from '../types';
 
-export type VehicleCategory = 'Cars' | 'Boats' | 'Ships' | 'Rail';
+export type VehicleCategory = 'Cars' | 'Boats' | 'Rail';
 
 export interface VehicleConfig {
   type: VehicleType;
@@ -28,9 +28,9 @@ export const VEHICLES: VehicleConfig[] = [
   { type: 'tugboat',    label: 'Tugboat',     emoji: '🛥️', category: 'Boats', scaleFactor: 1.2 },
   { type: 'fanboat',    label: 'Fan Boat',    emoji: '🛶', category: 'Boats', scaleFactor: 1.0 },
   // Ships
-  { type: 'cargo-ship',  label: 'Cargo Ship',  emoji: '🚢', category: 'Ships', scaleFactor: 2.5 },
-  { type: 'ocean-liner', label: 'Ocean Liner', emoji: '🛳️', category: 'Ships', scaleFactor: 3.0 },
-  { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Ships', scaleFactor: 2.0 },
+  { type: 'cargo-ship',  label: 'Cargo Ship',  emoji: '🚢', category: 'Boats', scaleFactor: 2.5 },
+  { type: 'ocean-liner', label: 'Ocean Liner', emoji: '🛳️', category: 'Boats', scaleFactor: 3.0 },
+  { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Boats', scaleFactor: 2.0 },
   // Rail
   { type: 'locomotive',   label: 'Locomotive',   emoji: '🚂', category: 'Rail', scaleFactor: 1.5 },
   { type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 1.8 },
@@ -38,7 +38,7 @@ export const VEHICLES: VehicleConfig[] = [
   { type: 'subway',       label: 'Subway',       emoji: '🚇', category: 'Rail', scaleFactor: 1.6 },
 ];
 
-export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Ships', 'Rail'];
+export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail'];
 
 const DEFAULT_VEHICLE = VEHICLES[0];
 
