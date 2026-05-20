@@ -559,14 +559,12 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
             .setLngLat(handlePos)
             .addTo(map);
 
-          let handleAdded = seg.handles.length > 0;
-
           marker.on('dragstart', () => { draggingHandleRef.current = handleKey; });
           marker.on('drag', () => {
             const ll = marker.getLngLat();
-            if (!handleAdded) {
+            const liveSeg = segmentsRef.current.find(s => s.id === seg.id);
+            if (!liveSeg || liveSeg.handles.length === 0) {
               dispatch({ type: 'ADD_HANDLE', segmentId: seg.id, handle: [ll.lng, ll.lat] });
-              handleAdded = true;
             } else {
               dispatch({ type: 'MOVE_HANDLE', segmentId: seg.id, index: 0, handle: [ll.lng, ll.lat] });
             }
