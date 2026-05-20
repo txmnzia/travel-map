@@ -63,6 +63,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(10);
   const [userScale, setUserScale] = useState(1);
+  const [cameraMode, setCameraMode] = useState<'static' | 'pov'>('static');
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -78,6 +79,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const playRef = useRef<() => void>(() => {});
+  const cameraModeRef = useRef<'static' | 'pov'>('static');
 
   const fullRoute = buildFullRoute(state);
 
@@ -212,10 +214,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Chase camera — follow position only, keep bearing fixed (north-up).
-    // The 3D model itself rotates to face the direction of travel.
+    // Camera: PoV rotates the map bearing with the vehicle; static keeps north-up.
     map.easeTo({
       center: position,
+      bearing: cameraModeRef.current === 'pov' ? smoothBearingRef.current : undefined,
       pitch: 60,
       zoom: animZoomRef.current,
       duration: 80,
@@ -279,6 +281,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   // Keep playRef current so auto-play timer fires with latest play callback
   useEffect(() => { playRef.current = play; }, [play]);
+
+  useEffect(() => { cameraModeRef.current = cameraMode; }, [cameraMode]);
 
   // Sync user-controlled scale to the live layer immediately (no model reload needed)
   useEffect(() => {
@@ -390,6 +394,22 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           onChange={e => setUserScale(Number(e.target.value))}
           className="w-full h-2 mb-4 accent-amber"
         />
+
+        {/* Camera mode toggle */}
+        <div className="flex gap-1 mb-3 bg-white/10 rounded-xl p-1">
+          <button
+            onClick={() => setCameraMode('static')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'static' ? 'bg-amber text-navy' : 'text-white/60'}`}
+          >
+            🗺 Overview
+          </button>
+          <button
+            onClick={() => setCameraMode('pov')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'pov' ? 'bg-amber text-navy' : 'text-white/60'}`}
+          >
+            🎥 Follow
+          </button>
+        </div>
 
         <div className="flex gap-3 mb-4">
           <button
