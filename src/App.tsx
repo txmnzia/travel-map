@@ -102,10 +102,8 @@ export default function App() {
           {/* Bottom toolbar */}
           <Toolbar
             canUndo={canUndo}
-            canRedo={canRedo}
             waypointCount={state.waypoints.length}
             onUndo={() => dispatch({ type: 'UNDO' })}
-            onRedo={() => dispatch({ type: 'REDO' })}
             onPlay={enterPreview}
             onClear={() => dispatch({ type: 'CLEAR_ALL' })}
             onStylePicker={() => setShowStylePicker(true)}
