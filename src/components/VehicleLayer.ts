@@ -37,6 +37,7 @@ export class VehicleLayer {
   private loadingUrl = '';
 
   scaleFactor = 1;
+  userScaleFactor = 1; // user-controlled multiplier, applied on top of per-vehicle scaleFactor
   position: [number, number] = [0, 0];
   bearing = 0;
 
@@ -148,7 +149,7 @@ export class VehicleLayer {
     // Zoom-adaptive scale: always appear ~80 CSS pixels wide regardless of zoom
     const zoom = this.map.getZoom();
     const metersPerPx = 40_075_017 / (512 * Math.pow(2, zoom));
-    const desiredMeters = 80 * metersPerPx * this.scaleFactor;
+    const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
     // +180° offset: GLB models face +Z which maps to south in Mercator space
