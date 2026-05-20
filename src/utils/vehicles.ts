@@ -47,7 +47,7 @@ export const VEHICLES: VehicleConfig[] = [
   { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Boats', scaleFactor: 2.0 },
   // Rail (multi-part: all parts normalised to loco scale and chained end-to-end)
   {
-    type: 'locomotive', label: 'Locomotive', emoji: '🚂', category: 'Rail', scaleFactor: 0.35,
+    type: 'locomotive', label: 'Locomotive', emoji: '🚂', category: 'Rail', scaleFactor: 1.0,
     colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-locomotive-a.glb'),
@@ -58,7 +58,7 @@ export const VEHICLES: VehicleConfig[] = [
     ],
   },
   {
-    type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 0.38,
+    type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 1.0,
     colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-electric-bullet-a.glb'),
@@ -73,7 +73,7 @@ export const VEHICLES: VehicleConfig[] = [
     partUrls: [trainUrl('train-tram-modern.glb')],
   },
   {
-    type: 'subway', label: 'Subway', emoji: '🚇', category: 'Rail', scaleFactor: 0.38,
+    type: 'subway', label: 'Subway', emoji: '🚇', category: 'Rail', scaleFactor: 1.0,
     colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-electric-subway-a.glb'),
