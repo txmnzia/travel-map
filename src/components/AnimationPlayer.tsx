@@ -375,33 +375,38 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
       {/* Bottom controls */}
       <div className="pointer-events-auto bg-navy/80 backdrop-blur-md rounded-t-2xl px-5 pt-4 pb-safe">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-white/60 text-xs w-20 shrink-0">Video length</span>
-          <input
-            type="range"
-            min={5}
-            max={30}
-            step={1}
-            value={duration}
-            onChange={e => setDuration(Number(e.target.value))}
-            className="flex-1 h-1.5 accent-amber"
-            disabled={isPlaying}
-          />
-          <span className="text-white font-bold text-xs w-7 text-right shrink-0">{duration}s</span>
-        </div>
-
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-white/60 text-xs w-20 shrink-0">Model size</span>
-          <input
-            type="range"
-            min={0.5}
-            max={3}
-            step={0.1}
-            value={userScale}
-            onChange={e => setUserScale(Number(e.target.value))}
-            className="flex-1 h-1.5 accent-amber"
-          />
-          <span className="text-white font-bold text-xs w-7 text-right shrink-0">{userScale.toFixed(1)}×</span>
+        <div className="flex gap-4 mb-3">
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="flex justify-between">
+              <span className="text-white/60 text-xs">Video length</span>
+              <span className="text-white font-bold text-xs">{duration}s</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={30}
+              step={1}
+              value={duration}
+              onChange={e => setDuration(Number(e.target.value))}
+              className="w-full h-1.5 accent-amber"
+              disabled={isPlaying}
+            />
+          </div>
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="flex justify-between">
+              <span className="text-white/60 text-xs">Model size</span>
+              <span className="text-white font-bold text-xs">{userScale.toFixed(1)}×</span>
+            </div>
+            <input
+              type="range"
+              min={0.5}
+              max={3}
+              step={0.1}
+              value={userScale}
+              onChange={e => setUserScale(Number(e.target.value))}
+              className="w-full h-1.5 accent-amber"
+            />
+          </div>
         </div>
 
         {/* Camera mode + counter toggles */}
