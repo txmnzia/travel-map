@@ -120,7 +120,7 @@ export function MapStylePicker({ current, onChange, onClose }: Props) {
             </button>
           ))}
         </div>
-        <p className="text-white/20 text-xs text-center pb-4">v20260520-23</p>
+        <p className="text-white/20 text-xs text-center pb-4">v20260520-24</p>
       </div>
     </>
   );
