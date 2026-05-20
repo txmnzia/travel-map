@@ -64,23 +64,20 @@ function createWaypointEl(
 
   el.style.width = '42px';
   el.style.height = '42px';
+  el.style.boxSizing = 'border-box';
   el.style.borderRadius = '50%';
   el.style.background = '#f5a623';
   el.style.border = '3px solid white';
   el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.35)';
-  el.style.display = 'flex';
-  el.style.alignItems = 'center';
-  el.style.justifyContent = 'center';
-  el.style.fontSize = '22px';
-  el.style.lineHeight = '1';
-  el.style.color = 'white';
+  el.style.position = 'relative';
 
-  if (!vehicle) {
-    el.textContent = '📍'; // solo waypoint, no segment yet
-  } else if (vehicleChanged) {
-    el.textContent = vehicle.emoji; // transport changes here — show icon
+  const emoji = !vehicle ? '📍' : vehicleChanged ? vehicle.emoji : null;
+  if (emoji) {
+    const inner = document.createElement('span');
+    inner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;line-height:1;pointer-events:none;';
+    inner.textContent = emoji;
+    el.appendChild(inner);
   }
-  // else: same transport — leave circle empty (plain amber dot)
 
   return el;
 }
