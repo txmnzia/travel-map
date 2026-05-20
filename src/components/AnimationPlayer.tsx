@@ -374,42 +374,35 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       <div className="flex-1" />
 
       {/* Bottom controls */}
-      <div className="pointer-events-auto bg-navy/90 backdrop-blur-md rounded-t-3xl px-5 pt-5 pb-safe">
-        <div className="w-full h-1.5 bg-white/20 rounded-full mb-4 overflow-hidden">
-          <div
-            className="h-full bg-amber rounded-full transition-none"
-            style={{ width: `${progress * 100}%` }}
+      <div className="pointer-events-auto bg-navy/80 backdrop-blur-md rounded-t-2xl px-5 pt-4 pb-safe">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-white/60 text-xs w-20 shrink-0">Video length</span>
+          <input
+            type="range"
+            min={5}
+            max={30}
+            step={1}
+            value={duration}
+            onChange={e => setDuration(Number(e.target.value))}
+            className="flex-1 h-1.5 accent-amber"
+            disabled={isPlaying}
           />
+          <span className="text-white font-bold text-xs w-7 text-right shrink-0">{duration}s</span>
         </div>
 
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-white/70 text-sm">Video length</span>
-          <span className="text-white font-bold text-sm">{duration}s</span>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-white/60 text-xs w-20 shrink-0">Model size</span>
+          <input
+            type="range"
+            min={0.5}
+            max={3}
+            step={0.1}
+            value={userScale}
+            onChange={e => setUserScale(Number(e.target.value))}
+            className="flex-1 h-1.5 accent-amber"
+          />
+          <span className="text-white font-bold text-xs w-7 text-right shrink-0">{userScale.toFixed(1)}×</span>
         </div>
-        <input
-          type="range"
-          min={5}
-          max={30}
-          step={1}
-          value={duration}
-          onChange={e => setDuration(Number(e.target.value))}
-          className="w-full h-2 mb-4 accent-amber"
-          disabled={isPlaying}
-        />
-
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-white/70 text-sm">Model size</span>
-          <span className="text-white font-bold text-sm">{userScale.toFixed(1)}×</span>
-        </div>
-        <input
-          type="range"
-          min={0.5}
-          max={3}
-          step={0.1}
-          value={userScale}
-          onChange={e => setUserScale(Number(e.target.value))}
-          className="w-full h-2 mb-4 accent-amber"
-        />
 
         {/* Camera mode + counter toggles */}
         <div className="flex gap-2 mb-3">
