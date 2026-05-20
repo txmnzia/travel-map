@@ -87,13 +87,14 @@ function createWaypointEl(
 function createHandleEl(): HTMLElement {
   const el = document.createElement('div');
   el.style.cssText = `
-    width: 12px;
-    height: 12px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: rgba(245, 166, 35, 0.55);
-    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    background: rgba(245, 166, 35, 0.9);
+    border: 2.5px solid rgba(255, 255, 255, 0.95);
     cursor: grab;
     user-select: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   `;
   return el;
 }
@@ -536,13 +537,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
       });
 
-      // For each segment, show one handle (at control point if set, else route midpoint)
+      // For each segment, show one handle (at control point if set, else geographic midpoint)
       segments.forEach(seg => {
         const handleKey = `${seg.id}:mid`;
-        // Visual position: use the actual control point so it stays where user dragged it
+        const fromWp = waypoints.find(w => w.id === seg.fromId);
+        const toWp = waypoints.find(w => w.id === seg.toId);
         const handlePos: [number, number] = seg.handles.length > 0
           ? seg.handles[0]
-          : routeMidpoint(seg.route);
+          : (fromWp && toWp)
+            ? [(fromWp.lng + toWp.lng) / 2, (fromWp.lat + toWp.lat) / 2]
+            : routeMidpoint(seg.route);
 
         if (existing.has(handleKey)) {
           // Don't reposition during an active drag — would reset MapLibre's drag tracking
