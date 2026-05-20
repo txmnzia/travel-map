@@ -160,8 +160,8 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
-    // Vertical bob: gentle sine wave (~800 ms period, 10 % of model size)
-    const bobAmt = Math.sin(now * 0.00785) * 0.10 * s;
+    // Vertical bob: very subtle sine wave (~800 ms period, 2.5 % of model size)
+    const bobAmt = Math.sin(now * 0.00785) * 0.025 * s;
 
     // Banking lean: tilt into turns proportional to bearing-change rate
     let bearingDelta = this.bearing - this.prevBearing;
