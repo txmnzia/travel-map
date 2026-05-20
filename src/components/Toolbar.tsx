@@ -2,10 +2,8 @@ import { useRef } from 'react';
 
 interface Props {
   canUndo: boolean;
-  canRedo: boolean;
   waypointCount: number;
   onUndo: () => void;
-  onRedo: () => void;
   onPlay: () => void;
   onClear: () => void;
   onStylePicker: () => void;
@@ -14,10 +12,8 @@ interface Props {
 
 export function Toolbar({
   canUndo,
-  canRedo,
   waypointCount,
   onUndo,
-  onRedo,
   onPlay,
   onClear,
   onStylePicker,
@@ -38,18 +34,14 @@ export function Toolbar({
         </div>
       )}
 
-      <div className="bg-navy border-t border-white/10 pb-safe pointer-events-auto">
-        {/* All buttons in one row; play button is inline and pops up via items-end + larger size */}
-        <div className="flex items-end justify-center gap-4 px-6 pt-5 pb-3">
-          <button onClick={onUndo} disabled={!canUndo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Undo">↩</button>
-          <button onClick={onRedo} disabled={!canRedo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Redo">↪</button>
-
-          {/* Play button — inline, larger, lifts above the row naturally */}
+      <div className="relative bg-navy border-t border-white/10 pb-safe pointer-events-auto">
+        {/* Play button — floats centered above the bar */}
+        <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
           <button
             onClick={onPlay}
             disabled={!canPlay}
             className={[
-              'w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-xl transition-all active:scale-90 relative bottom-2 shrink-0',
+              'w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-xl transition-all active:scale-90 pointer-events-auto',
               canPlay
                 ? 'bg-amber text-navy shadow-[0_4px_24px_rgba(245,166,35,0.6)]'
                 : 'bg-navy border-2 border-white/30 text-white/50',
@@ -58,7 +50,10 @@ export function Toolbar({
           >
             ▶
           </button>
+        </div>
 
+        {/* 🗺️ · 📂 · [gap] · ↩ · 🗑 — symmetric 2+2 around the centered play button */}
+        <div className="flex items-center justify-center gap-4 py-3 px-6">
           <button onClick={onStylePicker} className={btnBase} aria-label="Map style">🗺️</button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -67,6 +62,11 @@ export function Toolbar({
           >
             📂
           </button>
+
+          {/* Gap placeholder aligned with the floating play button */}
+          <div className="w-16 shrink-0" aria-hidden="true" />
+
+          <button onClick={onUndo} disabled={!canUndo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Undo">↩</button>
           <button onClick={onClear} disabled={waypointCount === 0} className={`${btnBase} disabled:opacity-30`} aria-label="Clear all">🗑</button>
           <input
             ref={fileInputRef}
