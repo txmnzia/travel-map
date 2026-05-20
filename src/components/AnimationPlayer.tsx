@@ -64,6 +64,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [duration, setDuration] = useState(10);
   const [userScale, setUserScale] = useState(1);
   const [cameraMode, setCameraMode] = useState<'static' | 'pov'>('static');
+  const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -346,7 +347,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           ←
         </button>
 
-        {isPlaying && (
+        {isPlaying && showCounter && (
           <div className="bg-red-500 text-white font-bold text-xl px-6 py-2 rounded-full shadow-lg">
             {kmTraveled.toLocaleString()} km
           </div>
@@ -395,19 +396,27 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           className="w-full h-2 mb-4 accent-amber"
         />
 
-        {/* Camera mode toggle */}
-        <div className="flex gap-1 mb-3 bg-white/10 rounded-xl p-1">
+        {/* Camera mode + counter toggles */}
+        <div className="flex gap-2 mb-3">
+          <div className="flex gap-1 flex-1 bg-white/10 rounded-xl p-1">
+            <button
+              onClick={() => setCameraMode('static')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'static' ? 'bg-amber text-navy' : 'text-white/60'}`}
+            >
+              🗺 Overview
+            </button>
+            <button
+              onClick={() => setCameraMode('pov')}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'pov' ? 'bg-amber text-navy' : 'text-white/60'}`}
+            >
+              🎥 Follow
+            </button>
+          </div>
           <button
-            onClick={() => setCameraMode('static')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'static' ? 'bg-amber text-navy' : 'text-white/60'}`}
+            onClick={() => setShowCounter(c => !c)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${showCounter ? 'bg-red-500/30 text-red-300' : 'bg-white/10 text-white/40'}`}
           >
-            🗺 Overview
-          </button>
-          <button
-            onClick={() => setCameraMode('pov')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'pov' ? 'bg-amber text-navy' : 'text-white/60'}`}
-          >
-            🎥 Follow
+            📍 km
           </button>
         </div>
 
