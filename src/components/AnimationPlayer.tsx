@@ -217,7 +217,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     // Camera: PoV rotates the map bearing with the vehicle; static keeps north-up.
     map.easeTo({
       center: position,
-      bearing: cameraModeRef.current === 'pov' ? smoothBearingRef.current : undefined,
+      ...(cameraModeRef.current === 'pov' ? { bearing: smoothBearingRef.current } : {}),
       pitch: 60,
       zoom: animZoomRef.current,
       duration: 80,
