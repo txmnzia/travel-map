@@ -9,6 +9,13 @@ export interface VehicleConfig {
   category: VehicleCategory;
   /** Dimensionless multiplier on top of the base 80-px target size */
   scaleFactor: number;
+  /** For multi-part vehicles: ordered list of GLB URLs to chain together */
+  partUrls?: string[];
+}
+
+function trainUrl(file: string): string {
+  const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+  return `${base}vehicles/_extras/train/${file}`;
 }
 
 export const VEHICLES: VehicleConfig[] = [
@@ -31,11 +38,39 @@ export const VEHICLES: VehicleConfig[] = [
   { type: 'cargo-ship',  label: 'Cargo Ship',  emoji: '🚢', category: 'Boats', scaleFactor: 2.5 },
   { type: 'ocean-liner', label: 'Ocean Liner', emoji: '🛳️', category: 'Boats', scaleFactor: 3.0 },
   { type: 'pirate-ship', label: 'Pirate Ship', emoji: '🏴‍☠️', category: 'Boats', scaleFactor: 2.0 },
-  // Rail
-  { type: 'locomotive',   label: 'Locomotive',   emoji: '🚂', category: 'Rail', scaleFactor: 1.5 },
-  { type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 1.8 },
-  { type: 'tram',         label: 'Tram',         emoji: '🚊', category: 'Rail', scaleFactor: 1.4 },
-  { type: 'subway',       label: 'Subway',       emoji: '🚇', category: 'Rail', scaleFactor: 1.6 },
+  // Rail (multi-part: all parts normalised to loco scale and chained end-to-end)
+  {
+    type: 'locomotive', label: 'Locomotive', emoji: '🚂', category: 'Rail', scaleFactor: 0.35,
+    partUrls: [
+      trainUrl('train-locomotive-a.glb'),
+      trainUrl('train-carriage-coal.glb'),
+      trainUrl('train-carriage-box.glb'),
+      trainUrl('train-carriage-flatbed.glb'),
+      trainUrl('train-carriage-lumber.glb'),
+    ],
+  },
+  {
+    type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 0.38,
+    partUrls: [
+      trainUrl('train-electric-bullet-a.glb'),
+      trainUrl('train-electric-bullet-b.glb'),
+      trainUrl('train-electric-bullet-b.glb'),
+      trainUrl('train-electric-bullet-c.glb'),
+    ],
+  },
+  {
+    type: 'tram', label: 'Tram', emoji: '🚊', category: 'Rail', scaleFactor: 1.2,
+    partUrls: [trainUrl('train-tram-modern.glb')],
+  },
+  {
+    type: 'subway', label: 'Subway', emoji: '🚇', category: 'Rail', scaleFactor: 0.38,
+    partUrls: [
+      trainUrl('train-electric-subway-a.glb'),
+      trainUrl('train-electric-subway-b.glb'),
+      trainUrl('train-electric-subway-b.glb'),
+      trainUrl('train-electric-subway-c.glb'),
+    ],
+  },
 ];
 
 export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail'];

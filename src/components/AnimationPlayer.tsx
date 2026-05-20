@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { TravelState } from '../types';
-import { getVehicle, vehicleModelUrl } from '../utils/vehicles';
+import { getVehicle, vehicleModelUrl, VehicleConfig } from '../utils/vehicles';
 import { interpolateAlong, sliceRoute } from '../utils/routing';
 import { VehicleLayer } from './VehicleLayer';
 
@@ -10,6 +10,15 @@ interface Props {
   map: maplibregl.Map | null;
   state: TravelState;
   onBack: () => void;
+}
+
+function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string) {
+  layer.bobEnabled = cfg.category === 'Boats';
+  if (cfg.partUrls) {
+    layer.loadParts(cfg.partUrls, cfg.scaleFactor);
+  } else {
+    layer.loadModel(vehicleModelUrl(type as Parameters<typeof vehicleModelUrl>[0]), cfg.scaleFactor);
+  }
 }
 
 function buildFullRoute(state: TravelState): [number, number][] {
@@ -120,8 +129,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (firstSeg) {
       const cfg = getVehicle(firstSeg.vehicle);
       layer.position = fullRoute[0];
-      layer.bobEnabled = cfg.category === 'Boats';
-      layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleFactor);
+      applyVehicle(layer, cfg, firstSeg.vehicle);
       lastVehicleTypeRef.current = firstSeg.vehicle;
     }
 
@@ -201,8 +209,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       const seg = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
-        layer.bobEnabled = cfg.category === 'Boats';
-        layer.loadModel(vehicleModelUrl(seg.vehicle), cfg.scaleFactor);
+        applyVehicle(layer, cfg, seg.vehicle);
         lastVehicleTypeRef.current = seg.vehicle;
       }
     }
@@ -270,8 +277,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.position = fullRoute[0];
         layer.bearing = startBearing;
         const cfg = getVehicle(firstSeg.vehicle);
-        layer.bobEnabled = cfg.category === 'Boats';
-        layer.loadModel(vehicleModelUrl(firstSeg.vehicle), cfg.scaleFactor);
+        applyVehicle(layer, cfg, firstSeg.vehicle);
         lastVehicleTypeRef.current = firstSeg.vehicle;
       }
     }
