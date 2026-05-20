@@ -109,18 +109,18 @@ export function MapStylePicker({ current, onChange, onClose }: Props) {
               key={style.id}
               onClick={() => { onChange(style.id); animateClose(); }}
               className={[
-                'flex flex-col items-center gap-2 py-3 px-4 rounded-2xl transition-all active:scale-95',
+                'flex flex-col items-center gap-2 py-3 w-24 rounded-2xl transition-all active:scale-95',
                 current === style.id
                   ? 'bg-amber text-navy ring-2 ring-white/40'
                   : 'bg-white/10 text-white hover:bg-white/20',
               ].join(' ')}
             >
-              <span className="text-3xl">{style.thumbnail}</span>
+              <span className="text-3xl w-10 text-center leading-none">{style.thumbnail}</span>
               <span className="text-sm font-semibold">{style.label}</span>
             </button>
           ))}
         </div>
-        <p className="text-white/20 text-xs text-center pb-4">v20260520-13</p>
+        <p className="text-white/20 text-xs text-center pb-4">v20260520-14</p>
       </div>
     </>
   );
