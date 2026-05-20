@@ -403,13 +403,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               onClick={() => setCameraMode('static')}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'static' ? 'bg-amber text-navy' : 'text-white/60'}`}
             >
-              🗺 Overview
+              🗺 3rd Person
             </button>
             <button
               onClick={() => setCameraMode('pov')}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${cameraMode === 'pov' ? 'bg-amber text-navy' : 'text-white/60'}`}
             >
-              🎥 Follow
+              🎥 1st Person
             </button>
           </div>
           <button
