@@ -1,3 +1,4 @@
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { MapStyleId } from '../types';
 import { MAP_STYLES } from '../utils/mapStyles';
 
@@ -16,17 +17,47 @@ export function MenuDrawer({
   onStyleChange,
   onClearAll,
 }: Props) {
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  const [backdropVisible, setBackdropVisible] = useState(false);
+
+  // Slide in from left on mount
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setBackdropVisible(true);
+      if (drawerRef.current) {
+        drawerRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0.72, 0, 1)';
+        drawerRef.current.style.transform = 'translateX(0)';
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Slide out to left then unmount
+  const handleClose = useCallback(() => {
+    setBackdropVisible(false);
+    if (drawerRef.current) {
+      drawerRef.current.style.transition = 'transform 250ms ease-in';
+      drawerRef.current.style.transform = 'translateX(-100%)';
+    }
+    setTimeout(() => onCloseRef.current(), 250);
+  }, []);
+
   return (
     <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 z-40 bg-black/40"
-        onClick={onClose}
+        className={`absolute inset-0 z-40 bg-black/40 transition-opacity duration-300 ${backdropVisible ? 'opacity-100' : 'opacity-0'}`}
+        onClick={handleClose}
         onTouchStart={(e) => e.stopPropagation()}
       />
 
-      {/* Drawer */}
+      {/* Drawer — starts off-screen left; enter effect slides it in */}
       <div
+        ref={drawerRef}
+        style={{ transform: 'translateX(-100%)' }}
         className="absolute top-0 left-0 bottom-0 z-50 w-72 bg-navy flex flex-col shadow-2xl"
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -51,7 +82,7 @@ export function MenuDrawer({
             {MAP_STYLES.map(style => (
               <button
                 key={style.id}
-                onClick={() => { onStyleChange(style.id); onClose(); }}
+                onClick={() => { onStyleChange(style.id); handleClose(); }}
                 className={[
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all active:scale-95 text-left',
                   currentStyle === style.id
@@ -72,7 +103,7 @@ export function MenuDrawer({
         {/* Actions */}
         <div className="px-4 pt-2 pb-2 border-t border-white/10 mt-2">
           <button
-            onClick={() => { if (hasWaypoints) onClearAll(); onClose(); }}
+            onClick={() => { if (hasWaypoints) onClearAll(); handleClose(); }}
             disabled={!hasWaypoints}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-left transition-all active:scale-95 disabled:opacity-30 text-red-400 hover:bg-white/10"
           >
@@ -102,7 +133,7 @@ export function MenuDrawer({
 
         {/* Version */}
         <div className="px-6 py-3 border-t border-white/10 pb-safe">
-          <p className="text-white/20 text-xs text-center">Draw a Route · v20260519-27</p>
+          <p className="text-white/20 text-xs text-center">Draw a Route · v20260519-28</p>
         </div>
       </div>
     </>
