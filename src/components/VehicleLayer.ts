@@ -41,6 +41,8 @@ export class VehicleLayer {
   position: [number, number] = [0, 0];
   bearing = 0;
 
+  bobEnabled = false;
+
   private leanAngle = 0;
   private prevBearing = 0;
   private prevRenderTime = 0;
@@ -160,8 +162,8 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
-    // Vertical bob: very subtle sine wave (~800 ms period, 2.5 % of model size)
-    const bobAmt = Math.sin(now * 0.00785) * 0.025 * s;
+    // Vertical bob: water vehicles only (~800 ms period, 2.5 % of model size)
+    const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785) * 0.05 * s : 0;
 
     // Banking lean: tilt into turns proportional to bearing-change rate
     let bearingDelta = this.bearing - this.prevBearing;
