@@ -11,11 +11,18 @@ export interface VehicleConfig {
   scaleFactor: number;
   /** For multi-part vehicles: ordered list of GLB URLs to chain together */
   partUrls?: string[];
+  /** Shared texture atlas to inject into all materials after loading */
+  colormapUrl?: string;
 }
 
+function base(): string {
+  return (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+}
 function trainUrl(file: string): string {
-  const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-  return `${base}vehicles/_extras/train/${file}`;
+  return `${base()}vehicles/_extras/train/${file}`;
+}
+function vehicleUrl(file: string): string {
+  return `${base()}vehicles/${file}`;
 }
 
 export const VEHICLES: VehicleConfig[] = [
@@ -41,6 +48,7 @@ export const VEHICLES: VehicleConfig[] = [
   // Rail (multi-part: all parts normalised to loco scale and chained end-to-end)
   {
     type: 'locomotive', label: 'Locomotive', emoji: '🚂', category: 'Rail', scaleFactor: 0.35,
+    colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-locomotive-a.glb'),
       trainUrl('train-carriage-coal.glb'),
@@ -51,6 +59,7 @@ export const VEHICLES: VehicleConfig[] = [
   },
   {
     type: 'bullet-train', label: 'Bullet Train', emoji: '🚅', category: 'Rail', scaleFactor: 0.38,
+    colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-electric-bullet-a.glb'),
       trainUrl('train-electric-bullet-b.glb'),
@@ -60,10 +69,12 @@ export const VEHICLES: VehicleConfig[] = [
   },
   {
     type: 'tram', label: 'Tram', emoji: '🚊', category: 'Rail', scaleFactor: 1.2,
+    colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [trainUrl('train-tram-modern.glb')],
   },
   {
     type: 'subway', label: 'Subway', emoji: '🚇', category: 'Rail', scaleFactor: 0.38,
+    colormapUrl: vehicleUrl('train-colormap.png'),
     partUrls: [
       trainUrl('train-electric-subway-a.glb'),
       trainUrl('train-electric-subway-b.glb'),

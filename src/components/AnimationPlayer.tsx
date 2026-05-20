@@ -15,7 +15,7 @@ interface Props {
 function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.partUrls) {
-    layer.loadParts(cfg.partUrls, cfg.scaleFactor);
+    layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
     layer.loadModel(vehicleModelUrl(type as Parameters<typeof vehicleModelUrl>[0]), cfg.scaleFactor);
   }
