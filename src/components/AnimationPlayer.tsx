@@ -62,6 +62,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(10);
+  const [userScale, setUserScale] = useState(1);
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -279,6 +280,14 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   // Keep playRef current so auto-play timer fires with latest play callback
   useEffect(() => { playRef.current = play; }, [play]);
 
+  // Sync user-controlled scale to the live layer immediately (no model reload needed)
+  useEffect(() => {
+    if (vehicleLayerRef.current) {
+      vehicleLayerRef.current.userScaleFactor = userScale;
+      map?.triggerRepaint();
+    }
+  }, [userScale, map]);
+
   // Auto-play when entering preview — wait for map camera to settle first
   useEffect(() => {
     if (fullRoute.length < 2) return;
@@ -366,6 +375,20 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           onChange={e => setDuration(Number(e.target.value))}
           className="w-full h-2 mb-4 accent-amber"
           disabled={isPlaying}
+        />
+
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-white/70 text-sm">Model size</span>
+          <span className="text-white font-bold text-sm">{userScale.toFixed(1)}×</span>
+        </div>
+        <input
+          type="range"
+          min={0.5}
+          max={3}
+          step={0.1}
+          value={userScale}
+          onChange={e => setUserScale(Number(e.target.value))}
+          className="w-full h-2 mb-4 accent-amber"
         />
 
         <div className="flex gap-3 mb-4">
