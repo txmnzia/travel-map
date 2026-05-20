@@ -3,7 +3,6 @@ import { MapEditor, MapEditorHandle } from './components/MapEditor';
 import { AnimationPlayer } from './components/AnimationPlayer';
 import { VehicleSelector } from './components/VehicleSelector';
 import { MapStylePicker } from './components/MapStylePicker';
-import { MenuDrawer } from './components/MenuDrawer';
 import { Toolbar } from './components/Toolbar';
 import { useWaypoints } from './hooks/useWaypoints';
 import { AppMode, MapStyleId, VehicleType } from './types';
@@ -15,7 +14,6 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('edit');
   const [mapStyle, setMapStyle] = useState<MapStyleId>('bright');
   const [showStylePicker, setShowStylePicker] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
 
   const [vehicleSelector, setVehicleSelector] = useState<{
     segmentId: string;
@@ -86,7 +84,6 @@ export default function App() {
             onPlay={enterPreview}
             onClear={() => dispatch({ type: 'CLEAR_ALL' })}
             onStylePicker={() => setShowStylePicker(true)}
-            onMenu={() => setShowMenu(true)}
           />
 
           {/* Vehicle selector bottom sheet */}
@@ -110,16 +107,7 @@ export default function App() {
             />
           )}
 
-          {/* Burger menu drawer */}
-          {showMenu && (
-            <MenuDrawer
-              currentStyle={mapStyle}
-              hasWaypoints={state.waypoints.length > 0}
-              onClose={() => setShowMenu(false)}
-              onStyleChange={setMapStyle}
-              onClearAll={() => dispatch({ type: 'CLEAR_ALL' })}
-            />
-          )}
+
         </>
       )}
 
