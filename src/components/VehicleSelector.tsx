@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
 
@@ -15,6 +15,23 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
+  // Entry/exit animation state
+  const [isVisible, setIsVisible] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setIsVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => onCloseRef.current(), 280);
+  }, []);
+
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => { handleCloseRef.current = handleClose; }, [handleClose]);
+
   // Native (non-React) touch listeners on the header so swipe-down is reliable
   useEffect(() => {
     const header = headerRef.current;
@@ -27,7 +44,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
     const onEnd = (e: TouchEvent) => {
       e.stopPropagation();
       if (e.changedTouches[0].clientY - swipeStartY.current > 50) {
-        onCloseRef.current();
+        handleCloseRef.current();
       }
     };
 
@@ -39,19 +56,21 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
     };
   }, []);
 
+  const shown = isVisible && !isClosing;
+
   return (
     <>
-      {/* Backdrop — above toolbar (z-50) */}
+      {/* Backdrop — fades in/out */}
       <div
-        className="absolute inset-0 z-[55]"
-        onClick={onClose}
+        className={`absolute inset-0 z-[55] transition-opacity duration-[280ms] ${shown ? 'opacity-100' : 'opacity-0'}`}
+        onClick={handleClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       />
 
-      {/* Bottom sheet — above backdrop */}
+      {/* Bottom sheet — slides up on enter, slides down on exit */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe"
+        className={`absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe transition-transform duration-[280ms] ${isClosing ? 'ease-in' : 'ease-out'} ${shown ? 'translate-y-0' : 'translate-y-full'}`}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
@@ -80,7 +99,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
                         key={v.type}
                         onClick={() => {
                           onSelect(segmentId, v.type);
-                          onClose();
+                          handleClose();
                         }}
                         className={[
                           'flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95',
