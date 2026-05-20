@@ -152,6 +152,9 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
     case 'CLEAR_ALL':
       return EMPTY;
 
+    case 'IMPORT_ROUTE':
+      return { waypoints: action.waypoints, segments: action.segments };
+
     case 'SET_VEHICLE': {
       const idx = state.segments.findIndex(s => s.id === action.segmentId);
       if (idx === -1) return state;

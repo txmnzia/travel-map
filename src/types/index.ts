@@ -41,4 +41,5 @@ export type TravelAction =
   | { type: 'REMOVE_WAYPOINT'; id: string }
   | { type: 'INSERT_WAYPOINT'; waypoint: Waypoint; segmentId: string }
   | { type: 'UNDO' }
-  | { type: 'REDO' };
+  | { type: 'REDO' }
+  | { type: 'IMPORT_ROUTE'; waypoints: Waypoint[]; segments: Segment[] };
