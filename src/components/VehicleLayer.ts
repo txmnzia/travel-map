@@ -167,15 +167,14 @@ export class VehicleLayer {
     Promise.all([Promise.all(glbPromises), texPromise] as const).then(([parts, colormap]) => {
       if (this.loadingUrl !== key) return;
 
-      const firstBox = new THREE.Box3().setFromObject(parts[0]);
-      const firstSize = firstBox.getSize(new THREE.Vector3());
-      const scale = 1 / Math.max(firstSize.x, firstSize.y, firstSize.z, 0.001);
-
       const GAP = 0.03;
       let zCursor = 0;
 
       const newParts: TrainPart[] = parts.map((part, i) => {
-        part.scale.setScalar(scale);
+        // Normalise each wagon independently so it matches a single-model vehicle in visual size
+        const rawBox = new THREE.Box3().setFromObject(part);
+        const rawSize = rawBox.getSize(new THREE.Vector3());
+        part.scale.setScalar(1 / Math.max(rawSize.x, rawSize.y, rawSize.z, 0.001));
 
         part.traverse(child => {
           if (child instanceof THREE.Mesh) {
