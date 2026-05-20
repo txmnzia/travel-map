@@ -124,6 +124,11 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     map.addLayer(layer as any);
     vehicleLayerRef.current = layer;
 
+    // Give the layer the full route so train wagons can look up their individual positions
+    layer.route = fullRoute;
+    layer.totalKm = totalKmRef.current;
+    layer.progress = 0;
+
     // Load first segment's vehicle model
     const firstSeg = state.segments[0];
     if (firstSeg) {
@@ -204,6 +209,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (layer) {
       layer.position = position;
       layer.bearing = smoothBearingRef.current;
+      layer.progress = prog;
 
       // Switch model when entering a new segment
       const seg = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
