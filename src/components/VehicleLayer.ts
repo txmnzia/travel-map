@@ -41,6 +41,10 @@ export class VehicleLayer {
   position: [number, number] = [0, 0];
   bearing = 0;
 
+  private leanAngle = 0;
+  private prevBearing = 0;
+  private prevRenderTime = 0;
+
   onAdd(map: maplibregl.Map, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
     this.camera = new THREE.Camera();
@@ -142,6 +146,9 @@ export class VehicleLayer {
       if (t >= 1) this.modelAnimStart = 0;
     }
 
+    const dt = this.prevRenderTime > 0 ? Math.min(now - this.prevRenderTime, 50) : 16;
+    this.prevRenderTime = now;
+
     const coord = maplibregl.MercatorCoordinate.fromLngLat(
       { lng: this.position[0], lat: this.position[1] },
       0,
@@ -153,13 +160,25 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
 
+    // Vertical bob: gentle sine wave (~800 ms period, 10 % of model size)
+    const bobAmt = Math.sin(now * 0.00785) * 0.10 * s;
+
+    // Banking lean: tilt into turns proportional to bearing-change rate
+    let bearingDelta = this.bearing - this.prevBearing;
+    if (bearingDelta > 180) bearingDelta -= 360;
+    if (bearingDelta < -180) bearingDelta += 360;
+    this.prevBearing = this.bearing;
+    const targetLean = Math.max(-0.30, Math.min(0.30, -bearingDelta * 0.05));
+    this.leanAngle += (targetLean - this.leanAngle) * Math.min(1, 0.15 * (dt / 16));
+
     // +180° offset: GLB models face +Z which maps to south in Mercator space
     const bearingRad = (-this.bearing + 180) * (Math.PI / 180);
     const modelMatrix = new THREE.Matrix4()
-      .makeTranslation(coord.x, coord.y, coord.z ?? 0)
+      .makeTranslation(coord.x, coord.y, (coord.z ?? 0) + bobAmt)
       .multiply(new THREE.Matrix4().makeScale(s, -s, s))
       .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))
-      .multiply(new THREE.Matrix4().makeRotationY(bearingRad));
+      .multiply(new THREE.Matrix4().makeRotationY(bearingRad))
+      .multiply(new THREE.Matrix4().makeRotationZ(this.leanAngle));
 
     this.camera.projectionMatrix = new THREE.Matrix4()
       .fromArray(matrix)
