@@ -41,7 +41,7 @@ export function Toolbar({
               'w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-xl transition-all active:scale-90 pointer-events-auto',
               canPlay
                 ? 'bg-amber text-navy shadow-[0_4px_24px_rgba(245,166,35,0.6)]'
-                : 'bg-white/20 text-white/30',
+                : 'bg-navy border-2 border-white/30 text-white/50',
             ].join(' ')}
             aria-label="Preview animation"
           >
@@ -54,14 +54,14 @@ export function Toolbar({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center text-white text-sm shadow transition-all active:scale-90 disabled:opacity-30"
+            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-white text-lg shadow transition-all active:scale-90 disabled:opacity-30"
             aria-label="Undo"
           >↩</button>
 
           <button
             onClick={onRedo}
             disabled={!canRedo}
-            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center text-white text-sm shadow transition-all active:scale-90 disabled:opacity-30"
+            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-white text-lg shadow transition-all active:scale-90 disabled:opacity-30"
             aria-label="Redo"
           >↪</button>
 
@@ -70,7 +70,7 @@ export function Toolbar({
 
           <button
             onClick={onStylePicker}
-            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center text-sm shadow transition-all active:scale-90"
+            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-lg shadow transition-all active:scale-90"
             aria-label="Map style"
           >🗺️</button>
 
