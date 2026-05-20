@@ -28,14 +28,14 @@ interface Props {
 // Checkered-flag pin SVG for the last waypoint
 const FLAG_PIN = `<svg viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
   <path d="M20 0C9 0 0 9 0 20C0 34 20 52 20 52C20 52 40 34 40 20C40 9 31 0 20 0Z" fill="#f5a623"/>
-  <rect x="10" y="8" width="5" height="5" fill="white"/>
-  <rect x="15" y="8" width="5" height="5" fill="black"/>
-  <rect x="10" y="13" width="5" height="5" fill="black"/>
-  <rect x="15" y="13" width="5" height="5" fill="white"/>
-  <rect x="10" y="18" width="5" height="5" fill="white"/>
-  <rect x="15" y="18" width="5" height="5" fill="black"/>
-  <rect x="10" y="23" width="5" height="5" fill="black"/>
-  <rect x="15" y="23" width="5" height="5" fill="white"/>
+  <rect x="15" y="8"  width="5" height="5" fill="white"/>
+  <rect x="20" y="8"  width="5" height="5" fill="black"/>
+  <rect x="15" y="13" width="5" height="5" fill="black"/>
+  <rect x="20" y="13" width="5" height="5" fill="white"/>
+  <rect x="15" y="18" width="5" height="5" fill="white"/>
+  <rect x="20" y="18" width="5" height="5" fill="black"/>
+  <rect x="15" y="23" width="5" height="5" fill="black"/>
+  <rect x="20" y="23" width="5" height="5" fill="white"/>
 </svg>`;
 
 function createWaypointEl(
@@ -71,7 +71,8 @@ function createWaypointEl(
   el.style.display = 'flex';
   el.style.alignItems = 'center';
   el.style.justifyContent = 'center';
-  el.style.fontSize = '18px';
+  el.style.fontSize = '22px';
+  el.style.lineHeight = '1';
   el.style.color = 'white';
 
   if (!vehicle) {

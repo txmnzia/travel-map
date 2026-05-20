@@ -21,6 +21,8 @@ export function Toolbar({
 }: Props) {
   const canPlay = waypointCount >= 2;
 
+  const btnBase = 'w-12 h-12 rounded-full bg-white/15 flex items-center justify-center text-xl shadow transition-all active:scale-90';
+
   return (
     <div className="absolute bottom-0 left-0 right-0 z-50 pointer-events-none">
       {!canPlay && waypointCount > 0 && (
@@ -49,37 +51,16 @@ export function Toolbar({
           </button>
         </div>
 
-        {/* Secondary buttons — symmetric around the play button gap */}
-        <div className="flex items-center justify-around py-3 px-6">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-white text-lg shadow transition-all active:scale-90 disabled:opacity-30"
-            aria-label="Undo"
-          >↩</button>
+        {/* Secondary buttons — centered with a gap matching the play button */}
+        <div className="flex items-center justify-center gap-4 py-3 px-6">
+          <button onClick={onUndo} disabled={!canUndo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Undo">↩</button>
+          <button onClick={onRedo} disabled={!canRedo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Redo">↪</button>
 
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-white text-lg shadow transition-all active:scale-90 disabled:opacity-30"
-            aria-label="Redo"
-          >↪</button>
+          {/* Gap placeholder aligned with the floating play button */}
+          <div className="w-16 shrink-0" aria-hidden="true" />
 
-          {/* Spacer matching play button width */}
-          <div className="w-16" aria-hidden="true" />
-
-          <button
-            onClick={onStylePicker}
-            className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-lg shadow transition-all active:scale-90"
-            aria-label="Map style"
-          >🗺️</button>
-
-          <button
-            onClick={onClear}
-            disabled={waypointCount === 0}
-            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center text-sm shadow transition-all active:scale-90 disabled:opacity-30"
-            aria-label="Clear all"
-          >🗑</button>
+          <button onClick={onStylePicker} className={btnBase} aria-label="Map style">🗺️</button>
+          <button onClick={onClear} disabled={waypointCount === 0} className={`${btnBase} disabled:opacity-30`} aria-label="Clear all">🗑</button>
         </div>
       </div>
     </div>
