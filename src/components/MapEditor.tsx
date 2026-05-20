@@ -25,17 +25,17 @@ interface Props {
   visible: boolean;
 }
 
-// Checkered-flag pin SVG for the last waypoint
+// Checkered-flag pin SVG — entire pin filled with a B&W checker pattern
 const FLAG_PIN = `<svg viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
-  <path d="M20 0C9 0 0 9 0 20C0 34 20 52 20 52C20 52 40 34 40 20C40 9 31 0 20 0Z" fill="#f5a623"/>
-  <rect x="15" y="8"  width="5" height="5" fill="white"/>
-  <rect x="20" y="8"  width="5" height="5" fill="black"/>
-  <rect x="15" y="13" width="5" height="5" fill="black"/>
-  <rect x="20" y="13" width="5" height="5" fill="white"/>
-  <rect x="15" y="18" width="5" height="5" fill="white"/>
-  <rect x="20" y="18" width="5" height="5" fill="black"/>
-  <rect x="15" y="23" width="5" height="5" fill="black"/>
-  <rect x="20" y="23" width="5" height="5" fill="white"/>
+  <defs>
+    <pattern id="chk" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+      <rect width="4" height="4" fill="white"/>
+      <rect x="4" y="0" width="4" height="4" fill="black"/>
+      <rect x="0" y="4" width="4" height="4" fill="black"/>
+      <rect x="4" y="4" width="4" height="4" fill="white"/>
+    </pattern>
+  </defs>
+  <path d="M20 0C9 0 0 9 0 20C0 34 20 52 20 52C20 52 40 34 40 20C40 9 31 0 20 0Z" fill="url(#chk)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
 </svg>`;
 
 function createWaypointEl(
@@ -62,11 +62,11 @@ function createWaypointEl(
   // Show the vehicle emoji only when transport changes (or on the very first waypoint)
   const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
 
-  el.style.width = '42px';
-  el.style.height = '42px';
+  el.style.width = '36px';
+  el.style.height = '36px';
   el.style.borderRadius = '50%';
   el.style.background = '#f5a623';
-  el.style.border = '3px solid white';
+  el.style.border = '2px solid white';
   el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.35)';
   el.style.display = 'flex';
   el.style.alignItems = 'center';
@@ -76,7 +76,7 @@ function createWaypointEl(
   const emoji = !vehicle ? '📍' : vehicleChanged ? vehicle.emoji : null;
   if (emoji) {
     const inner = document.createElement('span');
-    inner.style.cssText = 'font-size:20px;line-height:1;display:block;pointer-events:none;';
+    inner.style.cssText = 'font-size:16px;line-height:1;display:block;pointer-events:none;';
     inner.textContent = emoji;
     el.appendChild(inner);
   }
