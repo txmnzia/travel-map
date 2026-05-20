@@ -42,11 +42,11 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       const waypoints = state.waypoints.map(w =>
         w.id === action.id ? { ...w, lng: action.lng, lat: action.lat } : w,
       );
-      const segments = state.segments.map(seg =>
-        seg.fromId === action.id || seg.toId === action.id
-          ? recomputeSegment(seg, waypoints)
-          : seg,
-      );
+      const segments = state.segments.map(seg => {
+        if (seg.fromId !== action.id && seg.toId !== action.id) return seg;
+        // Clear stale handles — absolute coords are invalid after endpoint moves
+        return recomputeSegment({ ...seg, handles: [] }, waypoints);
+      });
       return { waypoints, segments };
     }
 
