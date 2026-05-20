@@ -9,7 +9,7 @@ import maplibregl from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { TravelState, TravelAction, Segment, Waypoint } from '../types';
 import { getVehicle } from '../utils/vehicles';
-import { computeRoute, routeMidpoint } from '../utils/routing';
+import { computeRoute } from '../utils/routing';
 import { getStyleUrl } from '../utils/mapStyles';
 import type { MapStyleId } from '../types';
 
@@ -87,15 +87,18 @@ function createWaypointEl(
 function createHandleEl(): HTMLElement {
   const el = document.createElement('div');
   el.style.cssText = `
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(245, 166, 35, 0.9);
-    border: 2.5px solid rgba(255, 255, 255, 0.95);
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
     cursor: grab;
     user-select: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
   `;
+  el.textContent = '🤏';
   return el;
 }
 
@@ -537,19 +540,24 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
       });
 
-      // For each segment, show one handle (at control point if set, else geographic midpoint)
+      // For each segment, show one handle sitting ON the curve (Bézier midpoint at t=0.5)
       segments.forEach(seg => {
         const handleKey = `${seg.id}:mid`;
         const fromWp = waypoints.find(w => w.id === seg.fromId);
         const toWp = waypoints.find(w => w.id === seg.toId);
+        const fLng = fromWp?.lng ?? 0, fLat = fromWp?.lat ?? 0;
+        const tLng = toWp?.lng ?? 0,  tLat = toWp?.lat ?? 0;
+
+        // Visual position: Bézier midpoint P(0.5) = 0.25A + 0.5H + 0.25B when curved,
+        // geographic midpoint for straight segments.
         const handlePos: [number, number] = seg.handles.length > 0
-          ? seg.handles[0]
-          : (fromWp && toWp)
-            ? [(fromWp.lng + toWp.lng) / 2, (fromWp.lat + toWp.lat) / 2]
-            : routeMidpoint(seg.route);
+          ? [
+              0.25 * fLng + 0.5 * seg.handles[0][0] + 0.25 * tLng,
+              0.25 * fLat + 0.5 * seg.handles[0][1] + 0.25 * tLat,
+            ]
+          : [(fLng + tLng) / 2, (fLat + tLat) / 2];
 
         if (existing.has(handleKey)) {
-          // Don't reposition during an active drag — would reset MapLibre's drag tracking
           if (draggingHandleRef.current !== handleKey) {
             existing.get(handleKey)!.setLngLat(handlePos);
           }
@@ -562,11 +570,20 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           marker.on('dragstart', () => { draggingHandleRef.current = handleKey; });
           marker.on('drag', () => {
             const ll = marker.getLngLat();
+            // Back-calculate control point from dragged midpoint: H = 2·P_mid − 0.5·(A+B)
+            const liveFrom = waypointsRef.current.find(w => w.id === seg.fromId);
+            const liveTo   = waypointsRef.current.find(w => w.id === seg.toId);
+            const controlPoint: [number, number] = (liveFrom && liveTo)
+              ? [
+                  2 * ll.lng - 0.5 * liveFrom.lng - 0.5 * liveTo.lng,
+                  2 * ll.lat - 0.5 * liveFrom.lat - 0.5 * liveTo.lat,
+                ]
+              : [ll.lng, ll.lat];
             const liveSeg = segmentsRef.current.find(s => s.id === seg.id);
             if (!liveSeg || liveSeg.handles.length === 0) {
-              dispatch({ type: 'ADD_HANDLE', segmentId: seg.id, handle: [ll.lng, ll.lat] });
+              dispatch({ type: 'ADD_HANDLE', segmentId: seg.id, handle: controlPoint });
             } else {
-              dispatch({ type: 'MOVE_HANDLE', segmentId: seg.id, index: 0, handle: [ll.lng, ll.lat] });
+              dispatch({ type: 'MOVE_HANDLE', segmentId: seg.id, index: 0, handle: controlPoint });
             }
           });
           marker.on('dragend', () => { draggingHandleRef.current = null; });
