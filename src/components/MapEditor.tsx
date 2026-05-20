@@ -129,6 +129,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     useEffect(() => {
       if (!containerRef.current) return;
 
+      // Use visualViewport.height (the visible area, excluding Safari chrome) so
+      // MapLibre always reads a non-zero, correct container height on iOS Safari,
+      // regardless of whether the CSS height chain resolved correctly.
+      const applySize = () => {
+        if (!containerRef.current) return;
+        const h = window.visualViewport?.height ?? window.innerHeight;
+        containerRef.current.style.height = `${h}px`;
+      };
+      applySize();
+
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: getStyleUrl(mapStyle),
@@ -213,8 +223,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         });
 
         mapReadyRef.current = true;
-        // Resize after load so the canvas fills the container after browser layout settles
-        requestAnimationFrame(() => map.resize());
+        requestAnimationFrame(() => { applySize(); map.resize(); });
       });
 
       // Click on empty map → add new destination waypoint.
@@ -229,7 +238,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
       // Resize on window resize (orientation change) and visualViewport resize
       // (iOS Safari URL bar show/hide — window.resize does NOT fire for that)
-      const onResize = () => map.resize();
+      const onResize = () => { applySize(); map.resize(); };
       window.addEventListener('resize', onResize);
       window.visualViewport?.addEventListener('resize', onResize);
 
@@ -599,7 +608,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     return (
       <div
         ref={containerRef}
-        className="absolute inset-0"
+        className="absolute top-0 left-0 w-full"
         style={{ visibility: 'visible' }}
       />
     );
