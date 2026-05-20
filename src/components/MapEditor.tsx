@@ -364,6 +364,22 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
         const src = mapRef.current?.getSource('routes') as maplibregl.GeoJSONSource | undefined;
         src?.setData(turf.featureCollection(features) as GeoJSON.FeatureCollection);
+
+        // Move handle markers in real-time for segments connected to the dragged waypoint
+        segs.forEach(s => {
+          if (s.fromId !== waypointId && s.toId !== waypointId) return;
+          const hm = handleMarkersRef.current.get(`${s.id}:mid`);
+          if (!hm || draggingHandleRef.current === `${s.id}:mid`) return;
+          const fLng = s.fromId === waypointId ? ll.lng : (wps.find(w => w.id === s.fromId)?.lng ?? 0);
+          const fLat = s.fromId === waypointId ? ll.lat : (wps.find(w => w.id === s.fromId)?.lat ?? 0);
+          const tLng = s.toId   === waypointId ? ll.lng : (wps.find(w => w.id === s.toId)?.lng   ?? 0);
+          const tLat = s.toId   === waypointId ? ll.lat : (wps.find(w => w.id === s.toId)?.lat   ?? 0);
+          const pos: [number, number] = s.handles.length > 0
+            ? [0.25 * fLng + 0.5 * s.handles[0][0] + 0.25 * tLng,
+               0.25 * fLat + 0.5 * s.handles[0][1] + 0.25 * tLat]
+            : [(fLng + tLng) / 2, (fLat + tLat) / 2];
+          hm.setLngLat(pos);
+        });
       };
 
       // Add or update markers
