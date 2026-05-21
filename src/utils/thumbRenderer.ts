@@ -3,6 +3,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VehicleType } from '../types';
 import { getVehicle, vehicleModelUrl } from './vehicles';
 
+const NON_PAINT_NAMES = [
+  'window', 'glass', 'windshield', 'windscreen', 'visor',
+  'wheel', 'tyre', 'tire', 'hub', 'rim',
+  'chrome', 'headlight', 'taillight', 'blinker', 'lamp', 'light',
+];
+
+function isTintable(mat: THREE.MeshStandardMaterial): boolean {
+  const name = mat.name.toLowerCase();
+  if (NON_PAINT_NAMES.some(p => name.includes(p))) return false;
+  if (mat.transparent && mat.opacity < 0.9) return false;
+  if ((((mat as unknown) as { transmission?: number }).transmission ?? 0) > 0.1) return false;
+  if (mat.metalness > 0.6) return false;
+  if (!mat.map) {
+    const { r, g, b } = mat.color;
+    if (0.299 * r + 0.587 * g + 0.114 * b < 0.07) return false;
+  }
+  return true;
+}
+
 const THUMB_SIZE = 128;
 
 interface Job {
@@ -94,6 +113,8 @@ class ThumbRenderer {
         if (child instanceof THREE.Mesh) {
           (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
             const mat = m as THREE.MeshStandardMaterial;
+            mat.userData.tintable = isTintable(mat);
+            mat.userData.origColor = mat.color.clone();
             if (colormap) mat.map = colormap;
             mat.side = THREE.FrontSide;
             mat.transparent = false;
@@ -141,14 +162,13 @@ class ThumbRenderer {
         // By the time we get here the model is usually already loaded (preloaded in parallel)
         const model = await this.getModel(job.vehicleType);
 
-        // Temporarily apply tint (save originals)
-        const origColors: THREE.Color[] = [];
+        // Temporarily apply tint to paintable materials only
         if (job.color !== null) {
           model.traverse(child => {
             if (child instanceof THREE.Mesh) {
               (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
                 const mat = m as THREE.MeshStandardMaterial;
-                origColors.push(mat.color.clone());
+                if (!mat.userData.tintable) return;
                 mat.color.set(job.color!);
                 mat.needsUpdate = true;
               });
@@ -165,12 +185,12 @@ class ThumbRenderer {
 
         // Restore original colors
         if (job.color !== null) {
-          let i = 0;
           model.traverse(child => {
             if (child instanceof THREE.Mesh) {
               (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
                 const mat = m as THREE.MeshStandardMaterial;
-                mat.color.copy(origColors[i++]);
+                if (!mat.userData.tintable) return;
+                if (mat.userData.origColor) mat.color.copy(mat.userData.origColor);
                 mat.needsUpdate = true;
               });
             }
