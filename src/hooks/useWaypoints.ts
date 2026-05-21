@@ -165,6 +165,13 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       return { ...state, segments };
     }
 
+    case 'SET_ANIMATION': {
+      const segments = state.segments.map(seg =>
+        seg.id === action.segmentId ? { ...seg, animation: action.animation } : seg,
+      );
+      return { ...state, segments };
+    }
+
     case 'SET_VEHICLE': {
       const idx = state.segments.findIndex(s => s.id === action.segmentId);
       if (idx === -1) return state;

@@ -81,16 +81,20 @@ class ThumbRenderer {
 
     const cfg = getVehicle(type);
 
-    // FBX branch for walking characters
+    // FBX branch for walking characters — character mesh + separate animation FBX
     if (cfg.fbxUrl) {
-      const p = Promise.all([
+      const loads: [Promise<THREE.Group>, Promise<THREE.Group | null>, Promise<THREE.Texture | null>] = [
         new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(cfg.fbxUrl!, res, undefined, rej)),
+        cfg.animUrl
+          ? new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(cfg.animUrl!, res, undefined, rej))
+          : Promise.resolve(null),
         cfg.skinUrl
           ? new Promise<THREE.Texture>((res, rej) => this.texLoader.load(cfg.skinUrl!, t => {
               t.colorSpace = THREE.SRGBColorSpace; res(t);
             }, undefined, rej))
-          : Promise.resolve(null as THREE.Texture | null),
-      ]).then(([group, skin]) => {
+          : Promise.resolve(null),
+      ];
+      const p = Promise.all(loads).then(([group, animGroup, skin]) => {
         const box = new THREE.Box3().setFromObject(group);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -110,10 +114,11 @@ class ThumbRenderer {
             });
           }
         });
-        // Advance animation to a mid-stride pose
-        if (group.animations.length > 0) {
+        // Apply animation clip from separate animation FBX, advance to mid-stride pose
+        const clip = animGroup?.animations[0] ?? group.animations[0] ?? null;
+        if (clip) {
           const mixer = new THREE.AnimationMixer(group);
-          mixer.clipAction(group.animations[0]).play();
+          mixer.clipAction(clip).play();
           mixer.update(0.4);
         }
         this.modelCache.set(type, group);

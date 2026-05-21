@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { TravelState } from '../types';
-import { getVehicle, vehicleModelUrl, VehicleConfig } from '../utils/vehicles';
+import { getVehicle, vehicleModelUrl, resolveAnimUrl, VehicleConfig } from '../utils/vehicles';
 import { interpolateAlong, sliceRoute } from '../utils/routing';
 import { VehicleLayer } from './VehicleLayer';
 
@@ -12,10 +12,10 @@ interface Props {
   onBack: () => void;
 }
 
-function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null) {
+function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null, animation: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.fbxUrl) {
-    layer.loadFBX(cfg.fbxUrl, cfg.skinUrl ?? null, cfg.scaleFactor);
+    layer.loadFBX(cfg.fbxUrl, resolveAnimUrl(cfg, animation), cfg.skinUrl ?? null, cfg.scaleFactor);
   } else if (cfg.partUrls) {
     layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
@@ -139,7 +139,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (firstSeg) {
       const cfg = getVehicle(firstSeg.vehicle);
       layer.position = fullRoute[0];
-      applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null);
+      applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null, firstSeg.animation ?? null);
       lastVehicleTypeRef.current = firstSeg.vehicle;
       lastColorRef.current = firstSeg.color ?? null;
     }
@@ -225,7 +225,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       const seg = vehicleAtProgress(state, displayProg, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
-        applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null);
+        applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
         lastVehicleTypeRef.current = seg.vehicle;
         lastColorRef.current = seg.color ?? null;
       } else if (seg && (seg.color ?? null) !== lastColorRef.current) {
@@ -319,7 +319,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.position = fullRoute[0];
         layer.bearing = startBearing;
         const cfg = getVehicle(firstSeg.vehicle);
-        applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null);
+        applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null, firstSeg.animation ?? null);
         lastVehicleTypeRef.current = firstSeg.vehicle;
         lastColorRef.current = firstSeg.color ?? null;
       }

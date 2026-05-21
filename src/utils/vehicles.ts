@@ -2,6 +2,13 @@ import { VehicleType } from '../types';
 
 export type VehicleCategory = 'Cars' | 'Boats' | 'Rail' | 'People';
 
+export interface WalkerAnim {
+  key: string;
+  label: string;
+  emoji: string;
+  animUrl: string;
+}
+
 export interface VehicleConfig {
   type: VehicleType;
   label: string;
@@ -13,8 +20,10 @@ export interface VehicleConfig {
   partUrls?: string[];
   /** Shared texture atlas to inject into all materials after loading */
   colormapUrl?: string;
-  fbxUrl?: string;   // FBX file containing mesh + animation
-  skinUrl?: string;  // skin texture PNG
+  fbxUrl?: string;        // FBX file containing the skinned character mesh
+  animUrl?: string;       // default animation FBX (used when walkerAnims not specified or no key match)
+  skinUrl?: string;       // skin texture PNG
+  walkerAnims?: WalkerAnim[]; // picker options for animation step
 }
 
 function base(): string {
@@ -29,6 +38,12 @@ function vehicleUrl(file: string): string {
 function walkUrl(file: string): string {
   return `${base()}vehicles/walk/${file}`;
 }
+
+const WALKER_ANIMS: WalkerAnim[] = [
+  { key: 'run',  label: 'Run',  emoji: '🏃', animUrl: walkUrl('run.fbx')  },
+  { key: 'idle', label: 'Idle', emoji: '🧍', animUrl: walkUrl('idle.fbx') },
+  { key: 'jump', label: 'Jump', emoji: '🦘', animUrl: walkUrl('jump.fbx') },
+];
 
 export const VEHICLES: VehicleConfig[] = [
   // Cars & road
@@ -87,10 +102,10 @@ export const VEHICLES: VehicleConfig[] = [
       trainUrl('train-electric-subway-c.glb'),
     ],
   },
-  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('criminalMaleA.png')  },
-  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('cyborgFemaleA.png')  },
-  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterFemaleA.png') },
-  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterMaleA.png')  },
+  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('criminalMaleA.png'),  walkerAnims: WALKER_ANIMS },
+  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('cyborgFemaleA.png'),  walkerAnims: WALKER_ANIMS },
+  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterFemaleA.png'), walkerAnims: WALKER_ANIMS },
+  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterMaleA.png'),  walkerAnims: WALKER_ANIMS },
 ];
 
 export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail', 'People'];
@@ -99,6 +114,12 @@ const DEFAULT_VEHICLE = VEHICLES[0];
 
 export function getVehicle(type: VehicleType): VehicleConfig {
   return VEHICLES.find(v => v.type === type) ?? DEFAULT_VEHICLE;
+}
+
+export function resolveAnimUrl(cfg: VehicleConfig, animKey: string | null | undefined): string | null {
+  if (!cfg.walkerAnims) return cfg.animUrl ?? null;
+  const found = animKey ? cfg.walkerAnims.find(a => a.key === animKey) : null;
+  return found ? found.animUrl : (cfg.walkerAnims[0]?.animUrl ?? cfg.animUrl ?? null);
 }
 
 export function vehicleModelUrl(type: VehicleType): string {
