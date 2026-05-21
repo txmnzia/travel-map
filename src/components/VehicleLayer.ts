@@ -73,7 +73,19 @@ export class VehicleLayer {
   private partDisappearStarts: number[] = [];
   private singleDisappearStart = 0;
 
-  /** Trigger disappear animation. For trains each wagon staggers by staggerMs. Returns total ms until fully gone. */
+  /** Returns true once every part has fully shrunk out. */
+  isFullyDone(): boolean {
+    const now = performance.now();
+    if (this.trainParts.length > 0) {
+      return this.trainParts.every((_, i) => {
+        const s = this.partDisappearStarts[i];
+        return s > 0 && now - s >= 350;
+      });
+    }
+    return this.singleDisappearStart > 0 && now - this.singleDisappearStart >= 350;
+  }
+
+  /** Trigger disappear animation. staggerMs only used for manual (non-position-based) calls. */
   startDisappear(staggerMs = 0): number {
     const now = performance.now();
     if (this.trainParts.length > 0) {
@@ -290,7 +302,11 @@ export class VehicleLayer {
         let pos: [number, number];
         let bear: number;
         if (this.route.length >= 2) {
-          if (rawProg < 0 && this.totalKm > 0) {
+          if (rawProg >= 1) {
+            // Wagon has reached the destination — trigger its own disappear
+            if (!this.partDisappearStarts[i]) this.partDisappearStarts[i] = now;
+            ({ position: pos, bearing: bear } = interpolateAlong(this.route, 0.9999));
+          } else if (rawProg < 0 && this.totalKm > 0) {
             // Wagon is behind the route start — extrapolate backwards
             const { position: startPos, bearing: startBear } = interpolateAlong(this.route, 0);
             const behindKm = -rawProg * this.totalKm;
@@ -298,7 +314,7 @@ export class VehicleLayer {
             pos = pt.geometry.coordinates as [number, number];
             bear = startBear;
           } else {
-            ({ position: pos, bearing: bear } = interpolateAlong(this.route, Math.min(1, rawProg)));
+            ({ position: pos, bearing: bear } = interpolateAlong(this.route, rawProg));
           }
         } else {
           pos = this.position;
@@ -357,6 +373,11 @@ export class VehicleLayer {
         const t = Math.min((now - this.modelAnimStart) / 280, 1);
         this.model.scale.setScalar(Math.max(0, easeOutBack(t)));
         if (t >= 1) this.modelAnimStart = 0;
+      }
+
+      // Auto-trigger disappear when single model reaches the end
+      if (this.progress >= 1 && this.singleDisappearStart === 0) {
+        this.singleDisappearStart = now;
       }
 
       const coord = maplibregl.MercatorCoordinate.fromLngLat(
