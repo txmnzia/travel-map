@@ -12,13 +12,15 @@ interface Props {
   onBack: () => void;
 }
 
-function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string) {
+function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.partUrls) {
     layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
     layer.loadModel(vehicleModelUrl(type as Parameters<typeof vehicleModelUrl>[0]), cfg.scaleFactor);
   }
+  // Store tint now so it's applied once the async load finishes
+  layer.setTint(color);
 }
 
 function buildFullRoute(state: TravelState): [number, number][] {
@@ -86,6 +88,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const segmentBreakpointsRef = useRef<number[]>([]);
   const smoothBearingRef = useRef<number>(0);
   const lastVehicleTypeRef = useRef<string>('');
+  const lastColorRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const playRef = useRef<() => void>(() => {});
@@ -135,8 +138,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (firstSeg) {
       const cfg = getVehicle(firstSeg.vehicle);
       layer.position = fullRoute[0];
-      applyVehicle(layer, cfg, firstSeg.vehicle);
+      applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null);
       lastVehicleTypeRef.current = firstSeg.vehicle;
+      lastColorRef.current = firstSeg.color ?? null;
     }
 
     // Set perspective camera at route start
@@ -220,8 +224,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       const seg = vehicleAtProgress(state, displayProg, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
-        applyVehicle(layer, cfg, seg.vehicle);
+        applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null);
         lastVehicleTypeRef.current = seg.vehicle;
+        lastColorRef.current = seg.color ?? null;
+      } else if (seg && (seg.color ?? null) !== lastColorRef.current) {
+        lastColorRef.current = seg.color ?? null;
+        layer.setTint(seg.color ?? null);
       }
     }
 
@@ -310,8 +318,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.position = fullRoute[0];
         layer.bearing = startBearing;
         const cfg = getVehicle(firstSeg.vehicle);
-        applyVehicle(layer, cfg, firstSeg.vehicle);
+        applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null);
         lastVehicleTypeRef.current = firstSeg.vehicle;
+        lastColorRef.current = firstSeg.color ?? null;
       }
     }
 

@@ -73,6 +73,9 @@ export class VehicleLayer {
   private partDisappearStarts: number[] = [];
   private singleDisappearStart = 0;
 
+  // User-chosen colour tint (null = use model's original colours)
+  userTint: string | null = null;
+
   /** Returns true once every part has fully shrunk out. */
   isFullyDone(): boolean {
     const now = performance.now();
@@ -83,6 +86,34 @@ export class VehicleLayer {
       });
     }
     return this.singleDisappearStart > 0 && now - this.singleDisappearStart >= 350;
+  }
+
+  /** Apply (or clear) a colour tint on all currently loaded mesh materials. */
+  setTint(color: string | null) {
+    this.userTint = color;
+    this._applyTintToScene();
+    this.map?.triggerRepaint();
+  }
+
+  private _applyTintToScene() {
+    const applyTo = (obj: THREE.Object3D) => {
+      if (obj instanceof THREE.Mesh) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(m => {
+          const mat = m as THREE.MeshStandardMaterial;
+          if (this.userTint) {
+            mat.color.set(this.userTint);
+          } else {
+            const orig = (mat as THREE.MeshStandardMaterial & { __origColor?: THREE.Color }).__origColor;
+            if (orig) mat.color.copy(orig);
+          }
+          mat.needsUpdate = true;
+        });
+      }
+      obj.children.forEach(c => applyTo(c));
+    };
+    if (this.model) applyTo(this.model);
+    this.trainParts.forEach(p => applyTo(p.group));
   }
 
   /** Trigger disappear animation. staggerMs only used for manual (non-position-based) calls. */
@@ -149,10 +180,12 @@ export class VehicleLayer {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              m.side = THREE.FrontSide;
-              m.transparent = false;
-              m.depthWrite = true;
-              (m as THREE.MeshStandardMaterial).alphaTest = 0.1;
+              const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
+              mat.__origColor = mat.color.clone();
+              mat.side = THREE.FrontSide;
+              mat.transparent = false;
+              mat.depthWrite = true;
+              mat.alphaTest = 0.1;
             });
           }
         });
@@ -164,6 +197,7 @@ export class VehicleLayer {
         this.model = wrapper;
         this.modelAnimStart = performance.now();
         this.scene.add(wrapper);
+        this._applyTintToScene();
         this.map?.triggerRepaint();
       },
       undefined,
@@ -213,7 +247,8 @@ export class VehicleLayer {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              const mat = m as THREE.MeshStandardMaterial;
+              const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
+              mat.__origColor = mat.color.clone();
               if (colormap) mat.map = colormap;
               mat.side = THREE.FrontSide;
               mat.transparent = false;
@@ -254,6 +289,7 @@ export class VehicleLayer {
       this.leanAngles = new Array(newParts.length).fill(0);
       this.prevPartBearings = new Array(newParts.length).fill(this.bearing);
       this.trainAnimStart = performance.now();
+      this._applyTintToScene();
       this.map?.triggerRepaint();
     }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
   }

@@ -523,7 +523,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           navigator.vibrate?.(40);
           el.dispatchEvent(new CustomEvent('open-vehicle-selector', {
             bubbles: true,
-            detail: { segmentId: seg.id, vehicle: seg.vehicle },
+            detail: { segmentId: seg.id, vehicle: seg.vehicle, color: seg.color ?? null },
           }));
         }, 600);
       };

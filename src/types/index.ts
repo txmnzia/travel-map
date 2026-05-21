@@ -19,6 +19,7 @@ export interface Segment {
   toId: string;
   vehicle: VehicleType;
   manualVehicle?: boolean;
+  color?: string | null;
   /** User-placed bezier control handles between the two waypoints */
   handles: [number, number][];
   /** Computed polyline coordinates [lng, lat][] */
@@ -42,4 +43,5 @@ export type TravelAction =
   | { type: 'INSERT_WAYPOINT'; waypoint: Waypoint; segmentId: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
+  | { type: 'SET_COLOR'; segmentId: string; color: string | null }
   | { type: 'IMPORT_ROUTE'; waypoints: Waypoint[]; segments: Segment[] };
