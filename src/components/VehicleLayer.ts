@@ -332,8 +332,8 @@ export class VehicleLayer {
     }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
   }
 
-  loadFBX(fbxUrl: string, skinUrl: string | null, scaleFactor = 1) {
-    const key = 'fbx:' + fbxUrl + ':' + (skinUrl ?? '');
+  loadFBX(fbxUrl: string, animUrl: string | null, skinUrl: string | null, scaleFactor = 1) {
+    const key = 'fbx:' + fbxUrl + ':' + (animUrl ?? '') + ':' + (skinUrl ?? '');
     if (key === this.loadingUrl) return;
     this.loadingUrl = key;
     this.scaleFactor = scaleFactor;
@@ -351,6 +351,10 @@ export class VehicleLayer {
       this.model = null;
     }
 
+    const animPromise: Promise<THREE.Group | null> = animUrl
+      ? new Promise((res, rej) => this.fbxLoader.load(animUrl, res, undefined, rej))
+      : Promise.resolve(null);
+
     const skinPromise: Promise<THREE.Texture | null> = skinUrl
       ? new Promise((res, rej) => new THREE.TextureLoader().load(
           skinUrl,
@@ -361,8 +365,9 @@ export class VehicleLayer {
 
     Promise.all([
       new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(fbxUrl, res, undefined, rej)),
+      animPromise,
       skinPromise,
-    ]).then(([group, skin]) => {
+    ]).then(([group, animGroup, skin]) => {
       if (this.loadingUrl !== key) return;
 
       const box = new THREE.Box3().setFromObject(group);
@@ -388,9 +393,11 @@ export class VehicleLayer {
         }
       });
 
-      if (group.animations.length > 0) {
+      // Use clip from dedicated animation FBX if provided, else fall back to mesh's own animations
+      const clip = animGroup?.animations[0] ?? group.animations[0] ?? null;
+      if (clip) {
         this.fbxMixer = new THREE.AnimationMixer(group);
-        this.fbxMixer.clipAction(group.animations[0]).play();
+        this.fbxMixer.clipAction(clip).play();
       }
 
       const wrapper = new THREE.Group();

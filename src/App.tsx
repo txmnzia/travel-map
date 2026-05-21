@@ -20,13 +20,14 @@ export default function App() {
     segmentId: string;
     vehicle: VehicleType;
     color: string | null;
+    animation: string | null;
   } | null>(null);
 
   // Listen for open-vehicle-selector events from marker elements
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null };
-      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null });
+      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null; animation?: string | null };
+      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null, animation: detail.animation ?? null });
     };
     document.addEventListener('open-vehicle-selector', handler);
     return () => document.removeEventListener('open-vehicle-selector', handler);
@@ -126,9 +127,11 @@ export default function App() {
               segmentId={vehicleSelector.segmentId}
               current={vehicleSelector.vehicle}
               currentColor={vehicleSelector.color}
-              onSelect={(segmentId, vehicle, color) => {
+              currentAnimation={vehicleSelector.animation}
+              onSelect={(segmentId, vehicle, color, animation) => {
                 dispatch({ type: 'SET_VEHICLE', segmentId, vehicle });
                 dispatch({ type: 'SET_COLOR', segmentId, color });
+                dispatch({ type: 'SET_ANIMATION', segmentId, animation: animation ?? null });
               }}
               onClose={() => setVehicleSelector(null)}
             />
