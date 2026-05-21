@@ -91,6 +91,7 @@ class ThumbRenderer {
           : Promise.resolve(null as unknown as THREE.Group),
         cfg.skinUrl
           ? new Promise<THREE.Texture>((res, rej) => this.texLoader.load(cfg.skinUrl!, t => {
+              t.flipY = false;
               t.colorSpace = THREE.SRGBColorSpace; res(t);
             }, undefined, rej))
           : Promise.resolve(null as unknown as THREE.Texture),
@@ -106,6 +107,7 @@ class ThumbRenderer {
             (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
               const mat = m as THREE.MeshStandardMaterial;
               if (skin) mat.map = skin;
+              mat.opacity = 1;
               mat.side = THREE.FrontSide;
               mat.transparent = false;
               mat.depthWrite = true;

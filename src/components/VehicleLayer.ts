@@ -351,10 +351,6 @@ export class VehicleLayer {
       this.model = null;
     }
 
-    const animPromise: Promise<THREE.Group | null> = animUrl
-      ? new Promise((res, rej) => this.fbxLoader.load(animUrl, res, undefined, rej))
-      : Promise.resolve(null);
-
     const skinPromise: Promise<THREE.Texture | null> = skinUrl
       ? new Promise((res, rej) => new THREE.TextureLoader().load(
           skinUrl,
@@ -363,9 +359,13 @@ export class VehicleLayer {
         ))
       : Promise.resolve(null);
 
+    // Use separate FBXLoader instances per load — a shared instance corrupts state when
+    // two loads are in-flight concurrently (character mesh + animation file).
     Promise.all([
-      new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(fbxUrl, res, undefined, rej)),
-      animPromise,
+      new Promise<THREE.Group>((res, rej) => new FBXLoader().load(fbxUrl, res, undefined, rej)),
+      animUrl
+        ? new Promise<THREE.Group | null>((res, rej) => new FBXLoader().load(animUrl, (g) => res(g), undefined, rej))
+        : Promise.resolve(null),
       skinPromise,
     ]).then(([group, animGroup, skin]) => {
       if (this.loadingUrl !== key) return;
@@ -385,6 +385,7 @@ export class VehicleLayer {
             const mat = m as THREE.MeshStandardMaterial;
             if (skin) mat.map = skin;
             mat.userData.origMap = mat.map;
+            mat.opacity = 1;
             mat.side = THREE.FrontSide;
             mat.transparent = false;
             mat.depthWrite = true;
