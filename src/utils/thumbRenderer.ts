@@ -114,8 +114,10 @@ class ThumbRenderer {
             });
           }
         });
-        // Apply animation clip from separate animation FBX, advance to mid-stride pose
-        const clip = animGroup?.animations[0] ?? group.animations[0] ?? null;
+        // Skip the "Targeting Pose" bind-pose clip (always index 0 in Mixamo FBX exports)
+        // and use the actual motion clip for the mid-stride thumbnail pose
+        const allClips = [...(animGroup?.animations ?? []), ...group.animations];
+        const clip = allClips.find(a => !a.name.includes('Targeting Pose')) ?? allClips[0] ?? null;
         if (clip) {
           const mixer = new THREE.AnimationMixer(group);
           mixer.clipAction(clip).play();
