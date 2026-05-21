@@ -1,6 +1,6 @@
 import { VehicleType } from '../types';
 
-export type VehicleCategory = 'Cars' | 'Boats' | 'Rail';
+export type VehicleCategory = 'Cars' | 'Boats' | 'Rail' | 'People';
 
 export interface VehicleConfig {
   type: VehicleType;
@@ -13,6 +13,8 @@ export interface VehicleConfig {
   partUrls?: string[];
   /** Shared texture atlas to inject into all materials after loading */
   colormapUrl?: string;
+  fbxUrl?: string;   // FBX file containing mesh + animation
+  skinUrl?: string;  // skin texture PNG
 }
 
 function base(): string {
@@ -23,6 +25,9 @@ function trainUrl(file: string): string {
 }
 function vehicleUrl(file: string): string {
   return `${base()}vehicles/${file}`;
+}
+function walkUrl(file: string): string {
+  return `${base()}vehicles/walk/${file}`;
 }
 
 export const VEHICLES: VehicleConfig[] = [
@@ -82,9 +87,13 @@ export const VEHICLES: VehicleConfig[] = [
       trainUrl('train-electric-subway-c.glb'),
     ],
   },
+  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('criminalMaleA.png')  },
+  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('cyborgFemaleA.png')  },
+  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterFemaleA.png') },
+  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterMaleA.png')  },
 ];
 
-export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail'];
+export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail', 'People'];
 
 const DEFAULT_VEHICLE = VEHICLES[0];
 

@@ -14,13 +14,14 @@ interface Props {
 
 function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
-  if (cfg.partUrls) {
+  if (cfg.fbxUrl) {
+    layer.loadFBX(cfg.fbxUrl, cfg.skinUrl ?? null, cfg.scaleFactor);
+  } else if (cfg.partUrls) {
     layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
     layer.loadModel(vehicleModelUrl(type as Parameters<typeof vehicleModelUrl>[0]), cfg.scaleFactor);
   }
-  // Store tint now so it's applied once the async load finishes
-  layer.setTint(color);
+  if (!cfg.fbxUrl) layer.setTint(color);
 }
 
 function buildFullRoute(state: TravelState): [number, number][] {

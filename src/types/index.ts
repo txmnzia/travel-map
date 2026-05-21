@@ -2,7 +2,8 @@ export type VehicleType =
   | 'sedan' | 'suv' | 'sports-car' | 'race-car' | 'taxi' | 'truck' | 'ambulance' | 'firetruck'
   | 'speedboat' | 'sailboat' | 'rowboat' | 'tugboat' | 'fanboat'
   | 'cargo-ship' | 'ocean-liner' | 'pirate-ship'
-  | 'locomotive' | 'bullet-train' | 'tram' | 'subway';
+  | 'locomotive' | 'bullet-train' | 'tram' | 'subway'
+  | 'walker-criminal' | 'walker-cyborg' | 'walker-skater-f' | 'walker-skater-m';
 
 export type AppMode = 'edit' | 'preview';
 export type MapStyleId = 'bright' | 'liberty' | 'positron' | 'dark-matter' | 'voyager';
