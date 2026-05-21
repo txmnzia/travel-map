@@ -192,13 +192,16 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
     if (startTimeRef.current === 0) startTimeRef.current = timestamp;
     const elapsed = timestamp - startTimeRef.current;
-    const prog = Math.min(elapsed / (duration * 1000), 1);
+    // Allow progress beyond 1 so rear wagons can reach the destination naturally.
+    // Cap display values at 1 for the UI.
+    const prog = elapsed / (duration * 1000);
+    const displayProg = Math.min(prog, 1);
 
-    setProgress(prog);
-    setKmTraveled(Math.round(prog * totalKmRef.current));
+    setProgress(displayProg);
+    setKmTraveled(Math.round(displayProg * totalKmRef.current));
 
-    const { position, bearing } = interpolateAlong(fullRoute, prog);
-    const trail = sliceRoute(fullRoute, prog);
+    const { position, bearing } = interpolateAlong(fullRoute, displayProg);
+    const trail = sliceRoute(fullRoute, displayProg);
 
     // Smooth the vehicle model's bearing (the 3D model turns, not the map)
     let delta = bearing - smoothBearingRef.current;
@@ -206,15 +209,15 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (delta < -180) delta += 360;
     smoothBearingRef.current += delta * 0.06;
 
-    // Update 3D vehicle layer
+    // Update 3D vehicle layer — pass uncapped prog so each wagon detects its own arrival
     const layer = vehicleLayerRef.current;
     if (layer) {
       layer.position = position;
       layer.bearing = smoothBearingRef.current;
       layer.progress = prog;
 
-      // Switch model when entering a new segment
-      const seg = vehicleAtProgress(state, prog, segmentBreakpointsRef.current);
+      // Switch model when entering a new segment (use capped value)
+      const seg = vehicleAtProgress(state, displayProg, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
         applyVehicle(layer, cfg, seg.vehicle);
@@ -232,7 +235,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       });
     }
 
-    // Camera: PoV rotates the map bearing with the vehicle; static keeps north-up.
+    // Camera follows the vehicle until it reaches the destination, then stays put
     map.easeTo({
       center: position,
       ...(cameraModeRef.current === 'pov' ? { bearing: smoothBearingRef.current } : {}),
@@ -242,38 +245,31 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       easing: (t) => t,
     });
 
-    if (prog < 1) {
+    const done = layer?.isFullyDone() ?? false;
+    if (!done) {
       animFrameRef.current = requestAnimationFrame(animate);
     } else {
       setIsPlaying(false);
       startTimeRef.current = 0;
 
-      // Shrink vehicle out (wagons stagger 150 ms apart for trains)
-      const disappearMs = vehicleLayerRef.current?.startDisappear(150) ?? 350;
-
-      // Pop arrival flag after all parts have gone
-      setTimeout(() => {
-        if (!map) return;
-        const dest = fullRoute[fullRoute.length - 1];
-        if (!document.getElementById('_flag-pop-kf')) {
-          const s = document.createElement('style');
-          s.id = '_flag-pop-kf';
-          s.textContent = '@keyframes _flagPop{0%{transform:scale(0) translateY(8px);opacity:0}75%{transform:scale(1.25) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}';
-          document.head.appendChild(s);
-        }
-        // Outer el is untouched by the animation so MapLibre's transform positioning works correctly.
-        // The inner span carries the keyframe animation.
-        const el = document.createElement('div');
-        el.style.cssText = 'cursor:default;user-select:none;';
-        const inner = document.createElement('span');
-        inner.style.cssText = 'font-size:2.4rem;line-height:1;display:block;animation:_flagPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;transform-origin:bottom center;';
-        inner.textContent = '🚩';
-        el.appendChild(inner);
-        if (arrivalFlagRef.current) arrivalFlagRef.current.remove();
-        arrivalFlagRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-          .setLngLat(dest)
-          .addTo(map);
-      }, disappearMs + 50);
+      // All wagons gone — pop the arrival flag
+      const dest = fullRoute[fullRoute.length - 1];
+      if (!document.getElementById('_flag-pop-kf')) {
+        const s = document.createElement('style');
+        s.id = '_flag-pop-kf';
+        s.textContent = '@keyframes _flagPop{0%{transform:scale(0) translateY(8px);opacity:0}75%{transform:scale(1.25) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}';
+        document.head.appendChild(s);
+      }
+      const el = document.createElement('div');
+      el.style.cssText = 'cursor:default;user-select:none;';
+      const inner = document.createElement('span');
+      inner.style.cssText = 'font-size:2.4rem;line-height:1;display:block;animation:_flagPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;transform-origin:bottom center;';
+      inner.textContent = '🚩';
+      el.appendChild(inner);
+      if (arrivalFlagRef.current) arrivalFlagRef.current.remove();
+      arrivalFlagRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(dest)
+        .addTo(map);
 
       if (mediaRecorderRef.current?.state === 'recording') {
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
