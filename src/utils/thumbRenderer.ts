@@ -2,30 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VehicleType } from '../types';
 import { getVehicle, vehicleModelUrl } from './vehicles';
-
-const NON_PAINT_NAMES = [
-  'window', 'glass', 'windshield', 'windscreen', 'visor',
-  'wheel', 'tyre', 'tire', 'hub', 'rim',
-  'chrome', 'headlight', 'taillight', 'blinker', 'lamp', 'light',
-];
-
-function isTintable(mat: THREE.MeshStandardMaterial): boolean {
-  const name = mat.name.toLowerCase();
-  if (NON_PAINT_NAMES.some(p => name.includes(p))) return false;
-  if (mat.transparent && mat.opacity < 0.9) return false;
-  if ((((mat as unknown) as { transmission?: number }).transmission ?? 0) > 0.1) return false;
-  if (mat.metalness > 0.6) return false;
-  if (!mat.map) {
-    const { r, g, b } = mat.color;
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max > 0.001 ? (max - min) / max : 0;
-    // Dark + unsaturated = rubber / tires / black trim
-    if (lum < 0.2 && sat < 0.15) return false;
-  }
-  return true;
-}
+import { extractAtlasPixels, buildTintedTexture } from './tintTexture';
 
 const THUMB_SIZE = 128;
 
@@ -118,21 +95,21 @@ class ThumbRenderer {
         if (child instanceof THREE.Mesh) {
           (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
             const mat = m as THREE.MeshStandardMaterial;
-            const tintable = isTintable(mat);
-            mat.userData.tintable = tintable;
-            mat.userData.origColor = mat.color.clone();
-            console.log(
-              `[ThumbRenderer] ${type} | mat="${mat.name}" tintable=${tintable}` +
-              ` color=(${mat.color.r.toFixed(3)},${mat.color.g.toFixed(3)},${mat.color.b.toFixed(3)})` +
-              ` metalness=${mat.metalness.toFixed(2)} roughness=${mat.roughness.toFixed(2)}` +
-              ` transparent=${mat.transparent} opacity=${mat.opacity.toFixed(2)}`,
-            );
             if (colormap) mat.map = colormap;
             mat.side = THREE.FrontSide;
             mat.transparent = false;
             mat.depthWrite = true;
             mat.alphaTest = 0.1;
             mat.needsUpdate = true;
+            // Extract atlas pixels for texture-based tinting (done once at load)
+            if (mat.map && !mat.userData.atlasData) {
+              const px = extractAtlasPixels(mat.map);
+              if (px) {
+                mat.userData.atlasData = px.data;
+                mat.userData.atlasWidth = px.width;
+                mat.userData.atlasHeight = px.height;
+              }
+            }
           });
         }
       });
@@ -174,15 +151,25 @@ class ThumbRenderer {
         // By the time we get here the model is usually already loaded (preloaded in parallel)
         const model = await this.getModel(job.vehicleType);
 
-        // Temporarily apply tint to paintable materials only
+        // Apply tint by swapping atlas texture with a recolored copy
+        let tintedTex: THREE.CanvasTexture | null = null as THREE.CanvasTexture | null;
+        const origMaps = new Map<THREE.MeshStandardMaterial, THREE.Texture | null>();
+
         if (job.color !== null) {
           model.traverse(child => {
             if (child instanceof THREE.Mesh) {
               (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
                 const mat = m as THREE.MeshStandardMaterial;
-                if (!mat.userData.tintable) return;
-                mat.color.set(job.color!);
-                mat.needsUpdate = true;
+                if (origMaps.has(mat)) return;
+                origMaps.set(mat, mat.map);
+                const { atlasData, atlasWidth, atlasHeight } = mat.userData;
+                if (atlasData) {
+                  if (!tintedTex) {
+                    tintedTex = buildTintedTexture(atlasData, atlasWidth, atlasHeight, job.color!);
+                  }
+                  mat.map = tintedTex;
+                  mat.needsUpdate = true;
+                }
               });
             }
           });
@@ -195,19 +182,9 @@ class ThumbRenderer {
         const dataUrl = this.ren!.domElement.toDataURL('image/png');
         this.scene!.remove(model);
 
-        // Restore original colors
-        if (job.color !== null) {
-          model.traverse(child => {
-            if (child instanceof THREE.Mesh) {
-              (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
-                const mat = m as THREE.MeshStandardMaterial;
-                if (!mat.userData.tintable) return;
-                if (mat.userData.origColor) mat.color.copy(mat.userData.origColor);
-                mat.needsUpdate = true;
-              });
-            }
-          });
-        }
+        // Restore original texture maps and dispose tinted copy
+        origMaps.forEach((origMap, mat) => { mat.map = origMap; mat.needsUpdate = true; });
+        tintedTex?.dispose();
 
         this.dataCache.set(cacheKey, dataUrl);
         job.resolve(dataUrl);
