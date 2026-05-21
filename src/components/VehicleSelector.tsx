@@ -3,13 +3,12 @@ import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES, WalkerAnim } from '../utils/vehicles';
 import { getThumbRenderer } from '../utils/thumbRenderer';
 
-// Kick off parallel GLB loading the moment the selector first mounts
-// Skip FBX-based vehicles (walkers) — they use emoji thumbnails instead
+// Kick off parallel loading the moment the selector first mounts
 let _preloaded = false;
 function ensurePreloaded() {
   if (_preloaded) return;
   _preloaded = true;
-  getThumbRenderer().preload(VEHICLES.filter(v => !v.fbxUrl).map(v => v.type));
+  getThumbRenderer().preload(VEHICLES.map(v => v.type));
 }
 
 const TINTS: { label: string; hex: string | null }[] = [
@@ -223,10 +222,7 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
                               : 'bg-white/10 text-white hover:bg-white/20',
                           ].join(' ')}
                         >
-                          {v.fbxUrl
-                            ? <span className="text-4xl leading-none flex items-center justify-center w-full aspect-square">{v.emoji}</span>
-                            : <ThumbImg vehicleType={v.type} />
-                          }
+                          <ThumbImg vehicleType={v.type} />
                           <span className="text-[11px] font-semibold leading-tight text-center">
                             {v.label}
                           </span>

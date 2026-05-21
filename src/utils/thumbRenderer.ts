@@ -81,20 +81,20 @@ class ThumbRenderer {
 
     const cfg = getVehicle(type);
 
-    // FBX branch for walking characters — character mesh + separate animation FBX
+    // FBX branch for walking characters — use separate FBXLoader instances per load
+    // to avoid any shared-state issues with concurrent requests
     if (cfg.fbxUrl) {
-      const loads: [Promise<THREE.Group>, Promise<THREE.Group | null>, Promise<THREE.Texture | null>] = [
-        new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(cfg.fbxUrl!, res, undefined, rej)),
+      const p: Promise<THREE.Group> = Promise.all([
+        new Promise<THREE.Group>((res, rej) => new FBXLoader().load(cfg.fbxUrl!, res, undefined, rej)),
         cfg.animUrl
-          ? new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(cfg.animUrl!, res, undefined, rej))
-          : Promise.resolve(null),
+          ? new Promise<THREE.Group>((res, rej) => new FBXLoader().load(cfg.animUrl!, res, undefined, rej))
+          : Promise.resolve(null as unknown as THREE.Group),
         cfg.skinUrl
           ? new Promise<THREE.Texture>((res, rej) => this.texLoader.load(cfg.skinUrl!, t => {
               t.colorSpace = THREE.SRGBColorSpace; res(t);
             }, undefined, rej))
-          : Promise.resolve(null),
-      ];
-      const p = Promise.all(loads).then(([group, animGroup, skin]) => {
+          : Promise.resolve(null as unknown as THREE.Texture),
+      ]).then(([group, animGroup, skin]) => {
         const box = new THREE.Box3().setFromObject(group);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -114,9 +114,8 @@ class ThumbRenderer {
             });
           }
         });
-        // Skip the "Targeting Pose" bind-pose clip (always index 0 in Mixamo FBX exports)
-        // and use the actual motion clip for the mid-stride thumbnail pose
-        const allClips = [...(animGroup?.animations ?? []), ...group.animations];
+        // Skip the "Targeting Pose" bind-pose clip (index 0 in Mixamo FBX exports)
+        const allClips = [...((animGroup?.animations) ?? []), ...group.animations];
         const clip = allClips.find(a => !a.name.includes('Targeting Pose')) ?? allClips[0] ?? null;
         if (clip) {
           const mixer = new THREE.AnimationMixer(group);
