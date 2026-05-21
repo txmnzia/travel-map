@@ -82,6 +82,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
           toId: toWp.id,
           vehicle: outgoing.vehicle,
           manualVehicle: false,
+          color: outgoing.color,
           handles: [],
           route: computeRoute(
             [fromWp.lng, fromWp.lat],
@@ -125,6 +126,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         toId: waypoint.id,
         vehicle: seg.vehicle,
         manualVehicle: false,
+        color: seg.color,
         handles: [],
         route: computeRoute([fromWp.lng, fromWp.lat], [waypoint.lng, waypoint.lat], seg.vehicle, []),
       };
@@ -134,6 +136,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         toId: toWp.id,
         vehicle: seg.vehicle,
         manualVehicle: false,
+        color: seg.color,
         handles: [],
         route: computeRoute([waypoint.lng, waypoint.lat], [toWp.lng, toWp.lat], seg.vehicle, []),
       };
@@ -154,6 +157,13 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
 
     case 'IMPORT_ROUTE':
       return { waypoints: action.waypoints, segments: action.segments };
+
+    case 'SET_COLOR': {
+      const segments = state.segments.map(seg =>
+        seg.id === action.segmentId ? { ...seg, color: action.color } : seg,
+      );
+      return { ...state, segments };
+    }
 
     case 'SET_VEHICLE': {
       const idx = state.segments.findIndex(s => s.id === action.segmentId);
@@ -247,8 +257,10 @@ export function useWaypoints() {
       let segment: Segment | undefined;
 
       if (prev) {
-        // Inherit the last segment's vehicle so the route type stays consistent
-        const vehicle = history.present.segments.at(-1)?.vehicle ?? 'sedan';
+        // Inherit the last segment's vehicle and color so the route type stays consistent
+        const lastSeg = history.present.segments.at(-1);
+        const vehicle = lastSeg?.vehicle ?? 'sedan';
+        const color = lastSeg?.color;
         const route = computeRoute([prev.lng, prev.lat], [lng, lat], vehicle, []);
         segment = {
           id: `seg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -256,6 +268,7 @@ export function useWaypoints() {
           toId: waypoint.id,
           vehicle,
           manualVehicle: false,
+          color,
           handles: [],
           route,
         };
