@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useState,
   forwardRef,
   useImperativeHandle,
 } from 'react';
@@ -104,6 +105,7 @@ function createHandleEl(): HTMLElement {
 
 export const MapEditor = forwardRef<MapEditorHandle, Props>(
   ({ state, dispatch, addWaypoint, mapStyle, visible }, ref) => {
+    const [mapLoadFailed, setMapLoadFailed] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -227,7 +229,22 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         });
 
         mapReadyRef.current = true;
+        loadSucceeded = true;
+        setMapLoadFailed(false);
         requestAnimationFrame(() => { applySize(); map.resize(); });
+      });
+
+      // Auto-retry style load on network failure (up to 3 times, then show manual retry)
+      let loadSucceeded = false;
+      let retries = 0;
+      map.on('error', () => {
+        if (loadSucceeded) return;
+        retries++;
+        if (retries <= 3) {
+          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(mapStyle)), retries * 1500);
+        } else {
+          setMapLoadFailed(true);
+        }
       });
 
       // Click on empty map → add new destination waypoint.
@@ -641,11 +658,29 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
 
     return (
-      <div
-        ref={containerRef}
-        className="absolute top-0 left-0 w-full"
-        style={{ visibility: 'visible' }}
-      />
+      <>
+        <div
+          ref={containerRef}
+          className="absolute top-0 left-0 w-full"
+          style={{ visibility: 'visible' }}
+        />
+        {mapLoadFailed && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-navy">
+            <p className="text-white text-center px-8 text-lg">Map failed to load.<br/><span className="text-white/50 text-sm">Check your connection and try again.</span></p>
+            <button
+              onClick={() => {
+                setMapLoadFailed(false);
+                if (mapRef.current) {
+                  mapRef.current.setStyle(getStyleUrl(mapStyle));
+                }
+              }}
+              className="px-8 py-3 bg-amber text-navy font-bold rounded-2xl text-base active:scale-95 transition-transform"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </>
     );
   },
 );
