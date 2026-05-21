@@ -80,6 +80,49 @@ class ThumbRenderer {
     if (this.loadingPromises.has(type)) return this.loadingPromises.get(type)!;
 
     const cfg = getVehicle(type);
+
+    // FBX branch for walking characters
+    if (cfg.fbxUrl) {
+      const p = Promise.all([
+        new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(cfg.fbxUrl!, res, undefined, rej)),
+        cfg.skinUrl
+          ? new Promise<THREE.Texture>((res, rej) => this.texLoader.load(cfg.skinUrl!, t => {
+              t.colorSpace = THREE.SRGBColorSpace; res(t);
+            }, undefined, rej))
+          : Promise.resolve(null as THREE.Texture | null),
+      ]).then(([group, skin]) => {
+        const box = new THREE.Box3().setFromObject(group);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+        group.scale.setScalar(1 / maxDim);
+        group.position.set(-center.x / maxDim, -center.y / maxDim, -center.z / maxDim);
+        group.traverse(child => {
+          if (child instanceof THREE.Mesh) {
+            (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+              const mat = m as THREE.MeshStandardMaterial;
+              if (skin) mat.map = skin;
+              mat.side = THREE.FrontSide;
+              mat.transparent = false;
+              mat.depthWrite = true;
+              mat.alphaTest = 0.1;
+              mat.needsUpdate = true;
+            });
+          }
+        });
+        // Advance animation to a mid-stride pose
+        if (group.animations.length > 0) {
+          const mixer = new THREE.AnimationMixer(group);
+          mixer.clipAction(group.animations[0]).play();
+          mixer.update(0.4);
+        }
+        this.modelCache.set(type, group);
+        return group;
+      });
+      this.loadingPromises.set(type, p);
+      return p;
+    }
+
     const url = cfg.partUrls ? cfg.partUrls[0] : vehicleModelUrl(type);
 
     const p = Promise.all([
@@ -178,7 +221,7 @@ class ThumbRenderer {
         }
 
         // rotation.y = 0 → front faces +Z; camera at (1.8,0.8,1.8) is 45° in XZ = 3/4 view
-        model.rotation.y = 0;
+        model.rotation.y = getVehicle(job.vehicleType).fbxUrl ? Math.PI : 0;
         this.scene!.add(model);
         this.ren!.render(this.scene!, this.cam!);
         const dataUrl = this.ren!.domElement.toDataURL('image/png');

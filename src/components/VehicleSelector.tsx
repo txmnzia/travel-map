@@ -23,7 +23,7 @@ const TINTS: { label: string; hex: string | null }[] = [
   { label: 'Silver',  hex: '#94a3b8' },
 ];
 
-const NO_COLOUR_VEHICLES: VehicleType[] = ['rowboat'];
+const NO_COLOUR_VEHICLES: VehicleType[] = ['rowboat', 'walker-criminal', 'walker-cyborg', 'walker-skater-f', 'walker-skater-m'];
 
 // Renders a single thumbnail — loads async, shows shimmer while loading
 function ThumbImg({
