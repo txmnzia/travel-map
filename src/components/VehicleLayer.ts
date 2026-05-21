@@ -3,6 +3,7 @@ import * as turf from '@turf/turf';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import maplibregl from 'maplibre-gl';
 import { interpolateAlong } from '../utils/routing';
+import { extractAtlasPixels, buildTintedTexture } from '../utils/tintTexture';
 
 const textureLoader = new THREE.TextureLoader();
 
@@ -10,30 +11,6 @@ function easeOutBack(t: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-}
-
-const NON_PAINT_NAMES = [
-  'window', 'glass', 'windshield', 'windscreen', 'visor',
-  'wheel', 'tyre', 'tire', 'hub', 'rim',
-  'chrome', 'headlight', 'taillight', 'blinker', 'lamp', 'light',
-];
-
-function isTintable(mat: THREE.MeshStandardMaterial): boolean {
-  const name = mat.name.toLowerCase();
-  if (NON_PAINT_NAMES.some(p => name.includes(p))) return false;
-  if (mat.transparent && mat.opacity < 0.9) return false;
-  if ((((mat as unknown) as { transmission?: number }).transmission ?? 0) > 0.1) return false;
-  if (mat.metalness > 0.6) return false;
-  if (!mat.map) {
-    const { r, g, b } = mat.color;
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max > 0.001 ? (max - min) / max : 0;
-    // Dark + unsaturated = rubber / tires / black trim
-    if (lum < 0.2 && sat < 0.15) return false;
-  }
-  return true;
 }
 
 interface TrainPart {
@@ -99,6 +76,7 @@ export class VehicleLayer {
 
   // User-chosen colour tint (null = use model's original colours)
   userTint: string | null = null;
+  private currentTintedTex: THREE.CanvasTexture | null = null;
 
   /** Returns true once every part has fully shrunk out. */
   isFullyDone(): boolean {
@@ -120,17 +98,26 @@ export class VehicleLayer {
   }
 
   private _applyTintToScene() {
+    // Rebuild tinted texture when tint changes
+    if (this.currentTintedTex) { this.currentTintedTex.dispose(); this.currentTintedTex = null; }
+
     const applyTo = (obj: THREE.Object3D) => {
       if (obj instanceof THREE.Mesh) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         mats.forEach(m => {
           const mat = m as THREE.MeshStandardMaterial;
-          if (!mat.userData.tintable) return;
           if (this.userTint) {
-            mat.color.set(this.userTint);
+            if (!this.currentTintedTex && mat.userData.atlasData) {
+              this.currentTintedTex = buildTintedTexture(
+                mat.userData.atlasData,
+                mat.userData.atlasWidth,
+                mat.userData.atlasHeight,
+                this.userTint,
+              );
+            }
+            if (this.currentTintedTex) mat.map = this.currentTintedTex;
           } else {
-            const orig = (mat as THREE.MeshStandardMaterial & { __origColor?: THREE.Color }).__origColor;
-            if (orig) mat.color.copy(orig);
+            mat.map = mat.userData.origMap ?? null;
           }
           mat.needsUpdate = true;
         });
@@ -205,13 +192,20 @@ export class VehicleLayer {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
-              mat.userData.tintable = isTintable(mat);
-              mat.__origColor = mat.color.clone();
+              const mat = m as THREE.MeshStandardMaterial;
               mat.side = THREE.FrontSide;
               mat.transparent = false;
               mat.depthWrite = true;
               mat.alphaTest = 0.1;
+              if (mat.map && !mat.userData.atlasData) {
+                const px = extractAtlasPixels(mat.map);
+                if (px) {
+                  mat.userData.origMap = mat.map;
+                  mat.userData.atlasData = px.data;
+                  mat.userData.atlasWidth = px.width;
+                  mat.userData.atlasHeight = px.height;
+                }
+              }
             });
           }
         });
@@ -260,6 +254,14 @@ export class VehicleLayer {
     Promise.all([Promise.all(glbPromises), texPromise] as const).then(([parts, colormap]) => {
       if (this.loadingUrl !== key) return;
 
+      // Extract atlas pixels once from the shared colormap
+      let atlasData: Uint8ClampedArray | null = null;
+      let atlasWidth = 0, atlasHeight = 0;
+      if (colormap) {
+        const px = extractAtlasPixels(colormap);
+        if (px) { atlasData = px.data; atlasWidth = px.width; atlasHeight = px.height; }
+      }
+
       const GAP = 0.03;
       let zCursor = 0;
 
@@ -273,15 +275,19 @@ export class VehicleLayer {
           if (child instanceof THREE.Mesh) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
-              mat.userData.tintable = isTintable(mat);
-              mat.__origColor = mat.color.clone();
+              const mat = m as THREE.MeshStandardMaterial;
               if (colormap) mat.map = colormap;
               mat.side = THREE.FrontSide;
               mat.transparent = false;
               mat.depthWrite = true;
               mat.alphaTest = 0.1;
               mat.needsUpdate = true;
+              if (atlasData) {
+                mat.userData.origMap = mat.map;
+                mat.userData.atlasData = atlasData;
+                mat.userData.atlasWidth = atlasWidth;
+                mat.userData.atlasHeight = atlasHeight;
+              }
             });
           }
         });
@@ -485,6 +491,7 @@ export class VehicleLayer {
     if (this.model) this.scene.remove(this.model);
     if (this.outgoing) this.scene.remove(this.outgoing);
     this._clearTrainParts();
+    this.currentTintedTex?.dispose();
     this.renderer.dispose();
   }
 }
