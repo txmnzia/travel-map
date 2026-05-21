@@ -470,7 +470,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           </button>
         </div>
 
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-3 mb-1">
           <button
             onClick={isPlaying ? stopAnimation : play}
             disabled={!hasRoute}
