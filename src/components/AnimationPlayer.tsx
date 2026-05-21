@@ -248,10 +248,10 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       setIsPlaying(false);
       startTimeRef.current = 0;
 
-      // Shrink vehicle out
-      vehicleLayerRef.current?.startDisappear();
+      // Shrink vehicle out (wagons stagger 150 ms apart for trains)
+      const disappearMs = vehicleLayerRef.current?.startDisappear(150) ?? 350;
 
-      // Pop arrival flag after the shrink completes
+      // Pop arrival flag after all parts have gone
       setTimeout(() => {
         if (!map) return;
         const dest = fullRoute[fullRoute.length - 1];
@@ -261,14 +261,19 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           s.textContent = '@keyframes _flagPop{0%{transform:scale(0) translateY(8px);opacity:0}75%{transform:scale(1.25) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}';
           document.head.appendChild(s);
         }
+        // Outer el is untouched by the animation so MapLibre's transform positioning works correctly.
+        // The inner span carries the keyframe animation.
         const el = document.createElement('div');
-        el.style.cssText = 'font-size:2.4rem;line-height:1;animation:_flagPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;transform-origin:bottom center;cursor:default;user-select:none;';
-        el.textContent = '🚩';
+        el.style.cssText = 'cursor:default;user-select:none;';
+        const inner = document.createElement('span');
+        inner.style.cssText = 'font-size:2.4rem;line-height:1;display:block;animation:_flagPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;transform-origin:bottom center;';
+        inner.textContent = '🚩';
+        el.appendChild(inner);
         if (arrivalFlagRef.current) arrivalFlagRef.current.remove();
         arrivalFlagRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat(dest)
           .addTo(map);
-      }, 320);
+      }, disappearMs + 50);
 
       if (mediaRecorderRef.current?.state === 'recording') {
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
