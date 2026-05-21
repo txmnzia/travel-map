@@ -13,7 +13,6 @@ function ensurePreloaded() {
 
 const TINTS: { label: string; hex: string | null }[] = [
   { label: 'Default', hex: null },
-  { label: 'White',   hex: '#f8fafc' },
   { label: 'Red',     hex: '#ef4444' },
   { label: 'Blue',    hex: '#3b82f6' },
   { label: 'Yellow',  hex: '#fbbf24' },
@@ -23,6 +22,8 @@ const TINTS: { label: string; hex: string | null }[] = [
   { label: 'Purple',  hex: '#a855f7' },
   { label: 'Silver',  hex: '#94a3b8' },
 ];
+
+const NO_COLOUR_VEHICLES: VehicleType[] = ['rowboat'];
 
 // Renders a single thumbnail — loads async, shows shimmer while loading
 function ThumbImg({
@@ -141,6 +142,10 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
   }, []);
 
   const pickVehicle = (type: VehicleType) => {
+    if (NO_COLOUR_VEHICLES.includes(type)) {
+      commitAndClose(type, null);
+      return;
+    }
     setSelVehicle(type);
     setStep('color');
   };
