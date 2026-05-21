@@ -90,6 +90,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const chunksRef = useRef<Blob[]>([]);
   const playRef = useRef<() => void>(() => {});
   const cameraModeRef = useRef<'static' | 'pov'>('static');
+  const arrivalFlagRef = useRef<maplibregl.Marker | null>(null);
 
   const fullRoute = buildFullRoute(state);
 
@@ -154,6 +155,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       // Restore markers
       hiddenMarkersRef.current.forEach(m => { m.style.visibility = ''; });
       hiddenMarkersRef.current = [];
+      if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }
 
       // Remove vehicle layer
       if (map.getLayer('vehicle-layer')) map.removeLayer('vehicle-layer');
@@ -245,6 +247,29 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     } else {
       setIsPlaying(false);
       startTimeRef.current = 0;
+
+      // Shrink vehicle out
+      vehicleLayerRef.current?.startDisappear();
+
+      // Pop arrival flag after the shrink completes
+      setTimeout(() => {
+        if (!map) return;
+        const dest = fullRoute[fullRoute.length - 1];
+        if (!document.getElementById('_flag-pop-kf')) {
+          const s = document.createElement('style');
+          s.id = '_flag-pop-kf';
+          s.textContent = '@keyframes _flagPop{0%{transform:scale(0) translateY(8px);opacity:0}75%{transform:scale(1.25) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(0);opacity:1}}';
+          document.head.appendChild(s);
+        }
+        const el = document.createElement('div');
+        el.style.cssText = 'font-size:2.4rem;line-height:1;animation:_flagPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;transform-origin:bottom center;cursor:default;user-select:none;';
+        el.textContent = '🚩';
+        if (arrivalFlagRef.current) arrivalFlagRef.current.remove();
+        arrivalFlagRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+          .setLngLat(dest)
+          .addTo(map);
+      }, 320);
+
       if (mediaRecorderRef.current?.state === 'recording') {
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
       }
@@ -257,6 +282,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     setProgress(0);
     setKmTraveled(0);
     startTimeRef.current = 0;
+    if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }
 
     if (map) {
       const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;

@@ -69,6 +69,16 @@ export class VehicleLayer {
   private prevBearing = 0;
   private prevRenderTime = 0;
 
+  // Arrival shrink-out
+  isDisappearing = false;
+  private disappearStart = 0;
+
+  startDisappear() {
+    this.isDisappearing = true;
+    this.disappearStart = performance.now();
+    this.map?.triggerRepaint();
+  }
+
   onAdd(map: maplibregl.Map, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
     this.camera = new THREE.Camera();
@@ -92,6 +102,7 @@ export class VehicleLayer {
     this.scaleFactor = scaleFactor;
 
     this._clearTrainParts();
+    this.isDisappearing = false;
 
     if (this.model) {
       if (this.outgoing) this.scene.remove(this.outgoing);
@@ -148,6 +159,7 @@ export class VehicleLayer {
     this.scaleFactor = scaleFactor;
 
     this._clearTrainParts();
+    this.isDisappearing = false;
     if (this.outgoing) { this.scene.remove(this.outgoing); this.outgoing = null; }
     if (this.model) { this.scene.remove(this.model); this.model = null; }
 
@@ -248,6 +260,12 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const mapMatrix = new THREE.Matrix4().fromArray(matrix);
 
+    let disappearScale = 1;
+    if (this.isDisappearing) {
+      const t = Math.min((now - this.disappearStart) / 350, 1);
+      disappearScale = Math.max(0, 1 - t * t); // quadratic ease-in shrink
+    }
+
     if (hasTrain) {
       // ── Multi-part train: one render pass per part ──────────────────────
       // Each pass isolates one group (others hidden) and uses
@@ -294,7 +312,7 @@ export class VehicleLayer {
         this.leanAngles[i] += (targetLean - this.leanAngles[i]) * Math.min(1, 0.15 * (dt / 16));
 
         const pCoord = maplibregl.MercatorCoordinate.fromLngLat({ lng: pos[0], lat: pos[1] }, 0);
-        const ps = pCoord.meterInMercatorCoordinateUnits() * desiredMeters * animScale;
+        const ps = pCoord.meterInMercatorCoordinateUnits() * desiredMeters * animScale * disappearScale;
         const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785 + i * 0.8) * 0.05 * ps : 0;
         const bearingRad = (-bear + 180) * (Math.PI / 180);
 
@@ -335,7 +353,7 @@ export class VehicleLayer {
       const coord = maplibregl.MercatorCoordinate.fromLngLat(
         { lng: this.position[0], lat: this.position[1] }, 0,
       );
-      const s = coord.meterInMercatorCoordinateUnits() * desiredMeters;
+      const s = coord.meterInMercatorCoordinateUnits() * desiredMeters * disappearScale;
       const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785) * 0.05 * s : 0;
 
       let bearingDelta = this.bearing - this.prevBearing;
