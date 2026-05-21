@@ -393,8 +393,10 @@ export class VehicleLayer {
         }
       });
 
-      // Use clip from dedicated animation FBX if provided, else fall back to mesh's own animations
-      const clip = animGroup?.animations[0] ?? group.animations[0] ?? null;
+      // Pick the real animation clip — FBX files typically have a "Targeting Pose" bind-pose
+      // clip first (index 0) followed by the actual motion clip (index 1+). Skip the pose clip.
+      const allClips = [...(animGroup?.animations ?? []), ...group.animations];
+      const clip = allClips.find(a => !a.name.includes('Targeting Pose')) ?? allClips[0] ?? null;
       if (clip) {
         this.fbxMixer = new THREE.AnimationMixer(group);
         this.fbxMixer.clipAction(clip).play();
