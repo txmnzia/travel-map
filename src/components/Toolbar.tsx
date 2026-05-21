@@ -28,7 +28,7 @@ export function Toolbar({
     <div className="absolute bottom-0 left-0 right-0 z-50 pointer-events-none">
       {!canPlay && waypointCount > 0 && (
         <div className="flex justify-center mb-14 pointer-events-none">
-          <span className="bg-navy/80 backdrop-blur text-white/60 text-xs px-3 py-1 rounded-full">
+          <span className="bg-navy/80 backdrop-blur text-white/60 text-xs px-3 py-1 rounded-full shadow">
             Add a destination to play
           </span>
         </div>
@@ -36,7 +36,7 @@ export function Toolbar({
 
       <div className="relative bg-navy border-t border-white/10 pb-safe pointer-events-auto">
         {/* Play button — floats centered above the bar */}
-        <div className="absolute -top-8 left-0 right-0 flex justify-center pointer-events-none">
+        <div className="absolute -top-4 left-0 right-0 flex justify-center pointer-events-none">
           <button
             onClick={onPlay}
             disabled={!canPlay}
