@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as turf from '@turf/turf';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import maplibregl from 'maplibre-gl';
 import { interpolateAlong } from '../utils/routing';
 import { extractAtlasPixels, buildTintedTexture } from '../utils/tintTexture';
@@ -52,6 +53,8 @@ export class VehicleLayer {
   private prevPartBearings: number[] = [];
 
   private readonly loader = new GLTFLoader();
+  private readonly fbxLoader = new FBXLoader();
+  private fbxMixer: THREE.AnimationMixer | null = null;
   private loadingUrl = '';
 
   scaleFactor = 1;
@@ -165,6 +168,7 @@ export class VehicleLayer {
     this._clearTrainParts();
     this.partDisappearStarts = [];
     this.singleDisappearStart = 0;
+    if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
 
     if (this.model) {
       if (this.outgoing) this.scene.remove(this.outgoing);
@@ -234,6 +238,7 @@ export class VehicleLayer {
     this._clearTrainParts();
     this.partDisappearStarts = [];
     this.singleDisappearStart = 0;
+    if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
     if (this.outgoing) { this.scene.remove(this.outgoing); this.outgoing = null; }
     if (this.model) { this.scene.remove(this.model); this.model = null; }
 
@@ -327,6 +332,77 @@ export class VehicleLayer {
     }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
   }
 
+  loadFBX(fbxUrl: string, skinUrl: string | null, scaleFactor = 1) {
+    const key = 'fbx:' + fbxUrl + ':' + (skinUrl ?? '');
+    if (key === this.loadingUrl) return;
+    this.loadingUrl = key;
+    this.scaleFactor = scaleFactor;
+
+    this._clearTrainParts();
+    this.partDisappearStarts = [];
+    this.singleDisappearStart = 0;
+    if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
+    if (this.currentTintedTex) { this.currentTintedTex.dispose(); this.currentTintedTex = null; }
+
+    if (this.model) {
+      if (this.outgoing) this.scene.remove(this.outgoing);
+      this.outgoing = this.model;
+      this.outgoingAnimStart = performance.now();
+      this.model = null;
+    }
+
+    const skinPromise: Promise<THREE.Texture | null> = skinUrl
+      ? new Promise((res, rej) => new THREE.TextureLoader().load(
+          skinUrl,
+          t => { t.colorSpace = THREE.SRGBColorSpace; res(t); },
+          undefined, rej,
+        ))
+      : Promise.resolve(null);
+
+    Promise.all([
+      new Promise<THREE.Group>((res, rej) => this.fbxLoader.load(fbxUrl, res, undefined, rej)),
+      skinPromise,
+    ]).then(([group, skin]) => {
+      if (this.loadingUrl !== key) return;
+
+      const box = new THREE.Box3().setFromObject(group);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+      group.scale.setScalar(1 / maxDim);
+      const center = box.getCenter(new THREE.Vector3());
+      group.position.x -= center.x / maxDim;
+      group.position.z -= center.z / maxDim;
+
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(m => {
+            const mat = m as THREE.MeshStandardMaterial;
+            if (skin) mat.map = skin;
+            mat.userData.origMap = mat.map;
+            mat.side = THREE.FrontSide;
+            mat.transparent = false;
+            mat.depthWrite = true;
+            mat.needsUpdate = true;
+          });
+        }
+      });
+
+      if (group.animations.length > 0) {
+        this.fbxMixer = new THREE.AnimationMixer(group);
+        this.fbxMixer.clipAction(group.animations[0]).play();
+      }
+
+      const wrapper = new THREE.Group();
+      wrapper.add(group);
+      wrapper.scale.setScalar(0);
+      this.model = wrapper;
+      this.modelAnimStart = performance.now();
+      this.scene.add(wrapper);
+      this.map?.triggerRepaint();
+    }).catch(err => console.warn('VehicleLayer: failed to load FBX', fbxUrl, err));
+  }
+
   private _clearTrainParts() {
     this.trainParts.forEach(p => this.scene.remove(p.group));
     this.trainParts = [];
@@ -343,6 +419,7 @@ export class VehicleLayer {
     const now = performance.now();
     const dt = this.prevRenderTime > 0 ? Math.min(now - this.prevRenderTime, 50) : 16;
     this.prevRenderTime = now;
+    if (this.fbxMixer) this.fbxMixer.update(dt / 1000);
 
     const zoom = this.map.getZoom();
     const metersPerPx = 40_075_017 / (512 * Math.pow(2, zoom));
@@ -492,6 +569,7 @@ export class VehicleLayer {
     if (this.outgoing) this.scene.remove(this.outgoing);
     this._clearTrainParts();
     this.currentTintedTex?.dispose();
+    if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
     this.renderer.dispose();
   }
 }
