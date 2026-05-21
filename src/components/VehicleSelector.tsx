@@ -3,6 +3,14 @@ import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
 import { getThumbRenderer } from '../utils/thumbRenderer';
 
+// Kick off parallel GLB loading the moment the selector first mounts
+let _preloaded = false;
+function ensurePreloaded() {
+  if (_preloaded) return;
+  _preloaded = true;
+  getThumbRenderer().preload(VEHICLES.map(v => v.type));
+}
+
 const TINTS: { label: string; hex: string | null }[] = [
   { label: 'Default', hex: null },
   { label: 'White',   hex: '#f8fafc' },
@@ -64,6 +72,9 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
   const [selVehicle, setSelVehicle] = useState<VehicleType>(current);
   const swipeStartY = useRef(0);
   const swipeDY = useRef(0);
+
+  // Start parallel loading of all vehicle GLBs immediately
+  useEffect(() => { ensurePreloaded(); }, []);
 
   // Slide up on mount
   useEffect(() => {
