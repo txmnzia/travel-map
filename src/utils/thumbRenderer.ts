@@ -17,7 +17,12 @@ function isTintable(mat: THREE.MeshStandardMaterial): boolean {
   if (mat.metalness > 0.6) return false;
   if (!mat.map) {
     const { r, g, b } = mat.color;
-    if (0.299 * r + 0.587 * g + 0.114 * b < 0.07) return false;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max > 0.001 ? (max - min) / max : 0;
+    // Dark + unsaturated = rubber / tires / black trim
+    if (lum < 0.2 && sat < 0.15) return false;
   }
   return true;
 }
