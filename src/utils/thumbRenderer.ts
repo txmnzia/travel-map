@@ -118,8 +118,15 @@ class ThumbRenderer {
         if (child instanceof THREE.Mesh) {
           (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
             const mat = m as THREE.MeshStandardMaterial;
-            mat.userData.tintable = isTintable(mat);
+            const tintable = isTintable(mat);
+            mat.userData.tintable = tintable;
             mat.userData.origColor = mat.color.clone();
+            console.log(
+              `[ThumbRenderer] ${type} | mat="${mat.name}" tintable=${tintable}` +
+              ` color=(${mat.color.r.toFixed(3)},${mat.color.g.toFixed(3)},${mat.color.b.toFixed(3)})` +
+              ` metalness=${mat.metalness.toFixed(2)} roughness=${mat.roughness.toFixed(2)}` +
+              ` transparent=${mat.transparent} opacity=${mat.opacity.toFixed(2)}`,
+            );
             if (colormap) mat.map = colormap;
             mat.side = THREE.FrontSide;
             mat.transparent = false;
