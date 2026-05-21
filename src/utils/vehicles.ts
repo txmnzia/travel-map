@@ -41,7 +41,6 @@ function walkUrl(file: string): string {
 
 const WALKER_ANIMS: WalkerAnim[] = [
   { key: 'run',  label: 'Run',  emoji: '🏃', animUrl: walkUrl('run.fbx')  },
-  { key: 'idle', label: 'Idle', emoji: '🧍', animUrl: walkUrl('idle.fbx') },
   { key: 'jump', label: 'Jump', emoji: '🦘', animUrl: walkUrl('jump.fbx') },
 ];
 
