@@ -305,7 +305,8 @@ export class VehicleLayer {
           if (rawProg >= 1) {
             // Wagon has reached the destination — trigger its own disappear
             if (!this.partDisappearStarts[i]) this.partDisappearStarts[i] = now;
-            ({ position: pos, bearing: bear } = interpolateAlong(this.route, 0.9999));
+            ({ position: pos } = interpolateAlong(this.route, 0.9999));
+            bear = this.prevPartBearings[i]; // freeze bearing — prevents snap-rotation on arrival
           } else if (rawProg < 0 && this.totalKm > 0) {
             // Wagon is behind the route start — extrapolate backwards
             const { position: startPos, bearing: startBear } = interpolateAlong(this.route, 0);
