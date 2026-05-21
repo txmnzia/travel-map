@@ -18,7 +18,10 @@ class ThumbRenderer {
   private cam?: THREE.PerspectiveCamera;
   private loader = new GLTFLoader();
   private texLoader = new THREE.TextureLoader();
+  // Fully prepared models (ready to render)
   private modelCache = new Map<VehicleType, THREE.Group>();
+  // In-flight network promises — allows all GLBs to load in parallel
+  private loadingPromises = new Map<VehicleType, Promise<THREE.Group>>();
   private dataCache = new Map<string, string>();
   private queue: Job[] = [];
   private busy = false;
@@ -39,8 +42,9 @@ class ThumbRenderer {
     this.ren.setClearColor(0x000000, 0);
 
     this.scene = new THREE.Scene();
+    // Camera at 45° in XZ — front faces +Z, so this gives a true 3/4 front-right view
     this.cam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
-    this.cam.position.set(1.4, 0.8, 2.0);
+    this.cam.position.set(1.8, 0.8, 1.8);
     this.cam.lookAt(0, 0, 0);
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 2.5));
@@ -68,40 +72,55 @@ class ThumbRenderer {
     );
   }
 
-  private async getModel(type: VehicleType): Promise<THREE.Group> {
-    if (this.modelCache.has(type)) return this.modelCache.get(type)!;
+  // Start the network fetch for a model (deduplicates concurrent requests).
+  private startLoad(type: VehicleType): Promise<THREE.Group> {
+    if (this.loadingPromises.has(type)) return this.loadingPromises.get(type)!;
 
     const cfg = getVehicle(type);
     const url = cfg.partUrls ? cfg.partUrls[0] : vehicleModelUrl(type);
 
-    const [model, colormap] = await Promise.all([
+    const p = Promise.all([
       this.loadGLB(url),
       cfg.colormapUrl ? this.loadTex(cfg.colormapUrl) : Promise.resolve(null),
-    ]);
+    ]).then(([model, colormap]) => {
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+      model.scale.setScalar(1 / maxDim);
+      model.position.set(-center.x / maxDim, -center.y / maxDim, -center.z / maxDim);
 
-    const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-    model.scale.setScalar(1 / maxDim);
-    model.position.set(-center.x / maxDim, -center.y / maxDim, -center.z / maxDim);
+      model.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+            const mat = m as THREE.MeshStandardMaterial;
+            if (colormap) mat.map = colormap;
+            mat.side = THREE.FrontSide;
+            mat.transparent = false;
+            mat.depthWrite = true;
+            mat.alphaTest = 0.1;
+            mat.needsUpdate = true;
+          });
+        }
+      });
 
-    model.traverse(child => {
-      if (child instanceof THREE.Mesh) {
-        (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
-          const mat = m as THREE.MeshStandardMaterial;
-          if (colormap) mat.map = colormap;
-          mat.side = THREE.FrontSide;
-          mat.transparent = false;
-          mat.depthWrite = true;
-          mat.alphaTest = 0.1;
-          mat.needsUpdate = true;
-        });
-      }
+      this.modelCache.set(type, model);
+      return model;
     });
 
-    this.modelCache.set(type, model);
-    return model;
+    this.loadingPromises.set(type, p);
+    return p;
+  }
+
+  /** Kick off parallel GLB loading for all given types — call on selector mount. */
+  preload(types: VehicleType[]) {
+    this.init();
+    types.forEach(t => this.startLoad(t));
+  }
+
+  private getModel(type: VehicleType): Promise<THREE.Group> {
+    if (this.modelCache.has(type)) return Promise.resolve(this.modelCache.get(type)!);
+    return this.startLoad(type); // joins the existing in-flight promise
   }
 
   private async _process() {
@@ -119,6 +138,7 @@ class ThumbRenderer {
 
       try {
         this.init();
+        // By the time we get here the model is usually already loaded (preloaded in parallel)
         const model = await this.getModel(job.vehicleType);
 
         // Temporarily apply tint (save originals)
@@ -136,7 +156,8 @@ class ThumbRenderer {
           });
         }
 
-        model.rotation.y = Math.PI / 5;
+        // rotation.y = 0 → front faces +Z; camera at (1.8,0.8,1.8) is 45° in XZ = 3/4 view
+        model.rotation.y = 0;
         this.scene!.add(model);
         this.ren!.render(this.scene!, this.cam!);
         const dataUrl = this.ren!.domElement.toDataURL('image/png');
@@ -173,7 +194,6 @@ class ThumbRenderer {
     return new Promise(resolve => {
       const job: Job = { vehicleType, color, priority, resolve };
       if (priority) {
-        // Push to front so currently-visible color step renders first
         this.queue.unshift(job);
       } else {
         this.queue.push(job);
