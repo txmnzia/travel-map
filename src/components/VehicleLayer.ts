@@ -69,14 +69,20 @@ export class VehicleLayer {
   private prevBearing = 0;
   private prevRenderTime = 0;
 
-  // Arrival shrink-out
-  isDisappearing = false;
-  private disappearStart = 0;
+  // Arrival shrink-out (per-wagon for trains; single value for other vehicles)
+  private partDisappearStarts: number[] = [];
+  private singleDisappearStart = 0;
 
-  startDisappear() {
-    this.isDisappearing = true;
-    this.disappearStart = performance.now();
+  /** Trigger disappear animation. For trains each wagon staggers by staggerMs. Returns total ms until fully gone. */
+  startDisappear(staggerMs = 0): number {
+    const now = performance.now();
+    if (this.trainParts.length > 0) {
+      this.partDisappearStarts = this.trainParts.map((_, i) => now + i * staggerMs);
+    } else {
+      this.singleDisappearStart = now;
+    }
     this.map?.triggerRepaint();
+    return this.trainParts.length > 0 ? (this.trainParts.length - 1) * staggerMs + 350 : 350;
   }
 
   onAdd(map: maplibregl.Map, gl: WebGLRenderingContext | WebGL2RenderingContext) {
@@ -102,7 +108,8 @@ export class VehicleLayer {
     this.scaleFactor = scaleFactor;
 
     this._clearTrainParts();
-    this.isDisappearing = false;
+    this.partDisappearStarts = [];
+    this.singleDisappearStart = 0;
 
     if (this.model) {
       if (this.outgoing) this.scene.remove(this.outgoing);
@@ -159,7 +166,8 @@ export class VehicleLayer {
     this.scaleFactor = scaleFactor;
 
     this._clearTrainParts();
-    this.isDisappearing = false;
+    this.partDisappearStarts = [];
+    this.singleDisappearStart = 0;
     if (this.outgoing) { this.scene.remove(this.outgoing); this.outgoing = null; }
     if (this.model) { this.scene.remove(this.model); this.model = null; }
 
@@ -260,12 +268,6 @@ export class VehicleLayer {
     const desiredMeters = 80 * metersPerPx * this.scaleFactor * this.userScaleFactor;
     const mapMatrix = new THREE.Matrix4().fromArray(matrix);
 
-    let disappearScale = 1;
-    if (this.isDisappearing) {
-      const t = Math.min((now - this.disappearStart) / 350, 1);
-      disappearScale = Math.max(0, 1 - t * t); // quadratic ease-in shrink
-    }
-
     if (hasTrain) {
       // ── Multi-part train: one render pass per part ──────────────────────
       // Each pass isolates one group (others hidden) and uses
@@ -311,8 +313,15 @@ export class VehicleLayer {
         const targetLean = Math.max(-0.30, Math.min(0.30, -delta * 0.05));
         this.leanAngles[i] += (targetLean - this.leanAngles[i]) * Math.min(1, 0.15 * (dt / 16));
 
+        let wagonDisappearScale = 1;
+        const wds = this.partDisappearStarts[i];
+        if (wds > 0) {
+          const t = Math.min((now - wds) / 350, 1);
+          wagonDisappearScale = Math.max(0, 1 - t * t);
+        }
+
         const pCoord = maplibregl.MercatorCoordinate.fromLngLat({ lng: pos[0], lat: pos[1] }, 0);
-        const ps = pCoord.meterInMercatorCoordinateUnits() * desiredMeters * animScale * disappearScale;
+        const ps = pCoord.meterInMercatorCoordinateUnits() * desiredMeters * animScale * wagonDisappearScale;
         const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785 + i * 0.8) * 0.05 * ps : 0;
         const bearingRad = (-bear + 180) * (Math.PI / 180);
 
@@ -353,7 +362,12 @@ export class VehicleLayer {
       const coord = maplibregl.MercatorCoordinate.fromLngLat(
         { lng: this.position[0], lat: this.position[1] }, 0,
       );
-      const s = coord.meterInMercatorCoordinateUnits() * desiredMeters * disappearScale;
+      let singleDisappearScale = 1;
+      if (this.singleDisappearStart > 0) {
+        const t = Math.min((now - this.singleDisappearStart) / 350, 1);
+        singleDisappearScale = Math.max(0, 1 - t * t);
+      }
+      const s = coord.meterInMercatorCoordinateUnits() * desiredMeters * singleDisappearScale;
       const bobAmt = this.bobEnabled ? Math.sin(now * 0.00785) * 0.05 * s : 0;
 
       let bearingDelta = this.bearing - this.prevBearing;
