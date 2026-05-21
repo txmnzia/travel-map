@@ -1,0 +1,191 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VehicleType } from '../types';
+import { getVehicle, vehicleModelUrl } from './vehicles';
+
+const THUMB_SIZE = 128;
+
+interface Job {
+  vehicleType: VehicleType;
+  color: string | null;
+  priority: boolean;
+  resolve: (url: string) => void;
+}
+
+class ThumbRenderer {
+  private ren?: THREE.WebGLRenderer;
+  private scene?: THREE.Scene;
+  private cam?: THREE.PerspectiveCamera;
+  private loader = new GLTFLoader();
+  private texLoader = new THREE.TextureLoader();
+  private modelCache = new Map<VehicleType, THREE.Group>();
+  private dataCache = new Map<string, string>();
+  private queue: Job[] = [];
+  private busy = false;
+
+  private init() {
+    if (this.ren) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = THUMB_SIZE;
+    canvas.height = THUMB_SIZE;
+    this.ren = new THREE.WebGLRenderer({
+      canvas,
+      alpha: true,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
+    this.ren.setSize(THUMB_SIZE, THUMB_SIZE);
+    this.ren.setPixelRatio(1);
+    this.ren.setClearColor(0x000000, 0);
+
+    this.scene = new THREE.Scene();
+    this.cam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+    this.cam.position.set(1.4, 0.8, 2.0);
+    this.cam.lookAt(0, 0, 0);
+
+    this.scene.add(new THREE.AmbientLight(0xffffff, 2.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 3);
+    sun.position.set(1, 2, 1);
+    this.scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.8);
+    fill.position.set(-1, 0.5, -1);
+    this.scene.add(fill);
+  }
+
+  private loadGLB(url: string): Promise<THREE.Group> {
+    return new Promise((res, rej) =>
+      this.loader.load(url, gltf => res(gltf.scene), undefined, rej),
+    );
+  }
+
+  private loadTex(url: string): Promise<THREE.Texture> {
+    return new Promise((res, rej) =>
+      this.texLoader.load(url, t => {
+        t.flipY = false;
+        t.colorSpace = THREE.SRGBColorSpace;
+        res(t);
+      }, undefined, rej),
+    );
+  }
+
+  private async getModel(type: VehicleType): Promise<THREE.Group> {
+    if (this.modelCache.has(type)) return this.modelCache.get(type)!;
+
+    const cfg = getVehicle(type);
+    const url = cfg.partUrls ? cfg.partUrls[0] : vehicleModelUrl(type);
+
+    const [model, colormap] = await Promise.all([
+      this.loadGLB(url),
+      cfg.colormapUrl ? this.loadTex(cfg.colormapUrl) : Promise.resolve(null),
+    ]);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    model.scale.setScalar(1 / maxDim);
+    model.position.set(-center.x / maxDim, -center.y / maxDim, -center.z / maxDim);
+
+    model.traverse(child => {
+      if (child instanceof THREE.Mesh) {
+        (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+          const mat = m as THREE.MeshStandardMaterial;
+          if (colormap) mat.map = colormap;
+          mat.side = THREE.FrontSide;
+          mat.transparent = false;
+          mat.depthWrite = true;
+          mat.alphaTest = 0.1;
+          mat.needsUpdate = true;
+        });
+      }
+    });
+
+    this.modelCache.set(type, model);
+    return model;
+  }
+
+  private async _process() {
+    if (this.busy) return;
+    this.busy = true;
+
+    while (this.queue.length > 0) {
+      const job = this.queue.shift()!;
+      const cacheKey = `${job.vehicleType}:${job.color ?? '_'}`;
+
+      if (this.dataCache.has(cacheKey)) {
+        job.resolve(this.dataCache.get(cacheKey)!);
+        continue;
+      }
+
+      try {
+        this.init();
+        const model = await this.getModel(job.vehicleType);
+
+        // Temporarily apply tint (save originals)
+        const origColors: THREE.Color[] = [];
+        if (job.color !== null) {
+          model.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+              (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+                const mat = m as THREE.MeshStandardMaterial;
+                origColors.push(mat.color.clone());
+                mat.color.set(job.color!);
+                mat.needsUpdate = true;
+              });
+            }
+          });
+        }
+
+        model.rotation.y = Math.PI / 5;
+        this.scene!.add(model);
+        this.ren!.render(this.scene!, this.cam!);
+        const dataUrl = this.ren!.domElement.toDataURL('image/png');
+        this.scene!.remove(model);
+
+        // Restore original colors
+        if (job.color !== null) {
+          let i = 0;
+          model.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+              (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+                const mat = m as THREE.MeshStandardMaterial;
+                mat.color.copy(origColors[i++]);
+                mat.needsUpdate = true;
+              });
+            }
+          });
+        }
+
+        this.dataCache.set(cacheKey, dataUrl);
+        job.resolve(dataUrl);
+      } catch (err) {
+        console.warn('ThumbRenderer: failed to render', job.vehicleType, err);
+        job.resolve('');
+      }
+    }
+
+    this.busy = false;
+  }
+
+  get(vehicleType: VehicleType, color: string | null = null, priority = false): Promise<string> {
+    const key = `${vehicleType}:${color ?? '_'}`;
+    if (this.dataCache.has(key)) return Promise.resolve(this.dataCache.get(key)!);
+    return new Promise(resolve => {
+      const job: Job = { vehicleType, color, priority, resolve };
+      if (priority) {
+        // Push to front so currently-visible color step renders first
+        this.queue.unshift(job);
+      } else {
+        this.queue.push(job);
+      }
+      this._process();
+    });
+  }
+}
+
+let _instance: ThumbRenderer | null = null;
+
+export function getThumbRenderer(): ThumbRenderer {
+  if (!_instance) _instance = new ThumbRenderer();
+  return _instance;
+}

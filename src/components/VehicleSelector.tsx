@@ -1,19 +1,49 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
+import { getThumbRenderer } from '../utils/thumbRenderer';
 
 const TINTS: { label: string; hex: string | null }[] = [
   { label: 'Default', hex: null },
-  { label: 'White', hex: '#f8fafc' },
-  { label: 'Red', hex: '#ef4444' },
-  { label: 'Blue', hex: '#3b82f6' },
-  { label: 'Yellow', hex: '#fbbf24' },
-  { label: 'Green', hex: '#22c55e' },
-  { label: 'Black', hex: '#1f2937' },
-  { label: 'Orange', hex: '#f97316' },
-  { label: 'Purple', hex: '#a855f7' },
-  { label: 'Silver', hex: '#94a3b8' },
+  { label: 'White',   hex: '#f8fafc' },
+  { label: 'Red',     hex: '#ef4444' },
+  { label: 'Blue',    hex: '#3b82f6' },
+  { label: 'Yellow',  hex: '#fbbf24' },
+  { label: 'Green',   hex: '#22c55e' },
+  { label: 'Black',   hex: '#1f2937' },
+  { label: 'Orange',  hex: '#f97316' },
+  { label: 'Purple',  hex: '#a855f7' },
+  { label: 'Silver',  hex: '#94a3b8' },
 ];
+
+// Renders a single thumbnail — loads async, shows shimmer while loading
+function ThumbImg({
+  vehicleType,
+  color,
+  priority = false,
+}: {
+  vehicleType: VehicleType;
+  color?: string | null;
+  priority?: boolean;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    getThumbRenderer()
+      .get(vehicleType, color ?? null, priority)
+      .then(url => { if (!cancelled && url) setSrc(url); });
+    return () => { cancelled = true; };
+  }, [vehicleType, color, priority]);
+
+  if (!src) {
+    return <div className="w-full aspect-square bg-white/5 animate-pulse rounded-xl" />;
+  }
+  return <img src={src} className="w-full aspect-square object-contain" alt="" />;
+}
+
+type Step = 'vehicle' | 'color';
 
 interface Props {
   segmentId: string;
@@ -30,8 +60,8 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const [backdropVisible, setBackdropVisible] = useState(false);
+  const [step, setStep] = useState<Step>('vehicle');
   const [selVehicle, setSelVehicle] = useState<VehicleType>(current);
-  const [selColor, setSelColor] = useState<string | null>(currentColor ?? null);
   const swipeStartY = useRef(0);
   const swipeDY = useRef(0);
 
@@ -47,7 +77,6 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Slide down then unmount
   const animateClose = useCallback(() => {
     setBackdropVisible(false);
     if (sheetRef.current) {
@@ -65,37 +94,31 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
     animateCloseRef.current();
   }, [segmentId, onSelect]);
 
-  // Drag-to-dismiss: sheet follows finger; commits close at 80px threshold
+  // Drag-to-dismiss
   useEffect(() => {
     const header = headerRef.current;
     if (!header) return;
-
     const onStart = (e: TouchEvent) => {
       e.stopPropagation();
       swipeStartY.current = e.touches[0].clientY;
       swipeDY.current = 0;
       if (sheetRef.current) sheetRef.current.style.transition = 'none';
     };
-
     const onMove = (e: TouchEvent) => {
       e.stopPropagation();
       const dy = Math.max(0, e.touches[0].clientY - swipeStartY.current);
       swipeDY.current = dy;
       if (sheetRef.current) sheetRef.current.style.transform = `translateY(${dy}px)`;
     };
-
     const onEnd = (e: TouchEvent) => {
       e.stopPropagation();
       if (swipeDY.current > 80) {
         animateCloseRef.current();
-      } else {
-        if (sheetRef.current) {
-          sheetRef.current.style.transition = 'transform 200ms ease-out';
-          sheetRef.current.style.transform = 'translateY(0)';
-        }
+      } else if (sheetRef.current) {
+        sheetRef.current.style.transition = 'transform 200ms ease-out';
+        sheetRef.current.style.transform = 'translateY(0)';
       }
     };
-
     header.addEventListener('touchstart', onStart, { passive: true });
     header.addEventListener('touchmove', onMove, { passive: true });
     header.addEventListener('touchend', onEnd);
@@ -105,6 +128,13 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
       header.removeEventListener('touchend', onEnd);
     };
   }, []);
+
+  const pickVehicle = (type: VehicleType) => {
+    setSelVehicle(type);
+    setStep('color');
+  };
+
+  const goBack = () => setStep('vehicle');
 
   return (
     <>
@@ -116,7 +146,7 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
         onTouchMove={(e) => e.stopPropagation()}
       />
 
-      {/* Bottom sheet — starts off-screen; enter effect slides it up */}
+      {/* Bottom sheet */}
       <div
         ref={sheetRef}
         style={{ transform: 'translateY(100%)' }}
@@ -129,79 +159,85 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-white/30" />
           </div>
-          <h2 className="text-white text-center font-bold text-lg tracking-wide py-2 px-4">
-            CHOOSE TRANSPORT
-          </h2>
+          <div className="flex items-center px-4 py-2 min-h-[48px]">
+            {step === 'color' && (
+              <button
+                onClick={goBack}
+                className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white rounded-full bg-white/10 flex-shrink-0"
+              >
+                ←
+              </button>
+            )}
+            <h2 className="flex-1 text-white text-center font-bold text-lg tracking-wide">
+              {step === 'vehicle' ? 'CHOOSE TRANSPORT' : 'CHOOSE COLOUR'}
+            </h2>
+            {step === 'color' && <div className="w-8 flex-shrink-0" />}
+          </div>
         </div>
 
-        {/* Scrollable vehicle grid */}
-        <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
-          {VEHICLE_CATEGORIES.map(cat => {
-            const vehicles = VEHICLES.filter(v => v.category === cat);
-            return (
-              <div key={cat} className="mb-4">
-                <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">{cat}</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {vehicles.map(v => {
-                    const selected = v.type === selVehicle;
-                    return (
-                      <button
-                        key={v.type}
-                        onClick={() => setSelVehicle(v.type)}
-                        className={[
-                          'flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95',
-                          selected
-                            ? 'bg-amber text-navy ring-2 ring-white/40'
-                            : 'bg-white/10 text-white hover:bg-white/20',
-                        ].join(' ')}
-                      >
-                        <span className="text-2xl leading-none">{v.emoji}</span>
-                        <span className="text-xs font-semibold leading-tight text-center">{v.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Colour picker — fixed at bottom */}
-        <div className="flex-shrink-0 px-4 pt-3 pb-2 border-t border-white/10">
-          <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Colour</p>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {TINTS.map(tint => {
-              const selected = tint.hex === selColor;
+        {/* ── Step 1: vehicle grid ──────────────────────────────────────── */}
+        {step === 'vehicle' && (
+          <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+            {VEHICLE_CATEGORIES.map(cat => {
+              const vehicles = VEHICLES.filter(v => v.category === cat);
               return (
-                <button
-                  key={tint.label}
-                  title={tint.label}
-                  onClick={() => {
-                    setSelColor(tint.hex);
-                    commitAndClose(selVehicle, tint.hex);
-                  }}
-                  className={[
-                    'w-9 h-9 rounded-full transition-all active:scale-90 border-2',
-                    selected ? 'border-amber scale-110' : 'border-white/20',
-                  ].join(' ')}
-                  style={
-                    tint.hex
-                      ? { background: tint.hex }
-                      : {
-                          background: 'repeating-conic-gradient(#94a3b8 0% 25%, #1e293b 0% 50%) 0 0 / 12px 12px',
-                        }
-                  }
-                />
+                <div key={cat} className="mb-4">
+                  <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">{cat}</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {vehicles.map(v => {
+                      const selected = v.type === selVehicle;
+                      return (
+                        <button
+                          key={v.type}
+                          onClick={() => pickVehicle(v.type)}
+                          className={[
+                            'flex flex-col items-center gap-1 pt-2 pb-2 px-1 rounded-2xl transition-all active:scale-95 overflow-hidden',
+                            selected
+                              ? 'bg-amber text-navy ring-2 ring-white/40'
+                              : 'bg-white/10 text-white hover:bg-white/20',
+                          ].join(' ')}
+                        >
+                          <ThumbImg vehicleType={v.type} />
+                          <span className="text-[11px] font-semibold leading-tight text-center">
+                            {v.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
-          <button
-            onClick={() => commitAndClose(selVehicle, selColor)}
-            className="w-full py-3 rounded-2xl font-bold text-base bg-amber text-navy active:scale-95 transition-all"
-          >
-            Done
-          </button>
-        </div>
+        )}
+
+        {/* ── Step 2: colour grid ───────────────────────────────────────── */}
+        {step === 'color' && (
+          <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+            <div className="grid grid-cols-4 gap-2">
+              {TINTS.map(tint => {
+                const selected = tint.hex === currentColor;
+                return (
+                  <button
+                    key={tint.label}
+                    onClick={() => commitAndClose(selVehicle, tint.hex)}
+                    className={[
+                      'flex flex-col items-center gap-1 pt-2 pb-2 px-1 rounded-2xl transition-all active:scale-95 overflow-hidden',
+                      selected
+                        ? 'bg-amber text-navy ring-2 ring-white/40'
+                        : 'bg-white/10 text-white hover:bg-white/20',
+                    ].join(' ')}
+                  >
+                    <ThumbImg vehicleType={selVehicle} color={tint.hex} priority />
+                    <span className="text-[11px] font-semibold leading-tight text-center">
+                      {tint.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
