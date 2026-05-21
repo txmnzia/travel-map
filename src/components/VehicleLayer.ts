@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as turf from '@turf/turf';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import maplibregl from 'maplibre-gl';
 import { interpolateAlong } from '../utils/routing';
@@ -262,13 +263,27 @@ export class VehicleLayer {
 
       this.trainParts.forEach(({ group, zOffset }, i) => {
         const offsetKm = zOffset * desiredMeters / 1000;
-        const partProg = this.route.length >= 2 && this.totalKm > 0
-          ? Math.max(0, Math.min(1, this.progress - offsetKm / this.totalKm))
+        const rawProg = this.route.length >= 2 && this.totalKm > 0
+          ? this.progress - offsetKm / this.totalKm
           : this.progress;
 
-        const { position: pos, bearing: bear } = this.route.length >= 2
-          ? interpolateAlong(this.route, partProg)
-          : { position: this.position, bearing: this.bearing };
+        let pos: [number, number];
+        let bear: number;
+        if (this.route.length >= 2) {
+          if (rawProg < 0 && this.totalKm > 0) {
+            // Wagon is behind the route start — extrapolate backwards
+            const { position: startPos, bearing: startBear } = interpolateAlong(this.route, 0);
+            const behindKm = -rawProg * this.totalKm;
+            const pt = turf.destination(turf.point(startPos), behindKm, startBear + 180, { units: 'kilometers' });
+            pos = pt.geometry.coordinates as [number, number];
+            bear = startBear;
+          } else {
+            ({ position: pos, bearing: bear } = interpolateAlong(this.route, Math.min(1, rawProg)));
+          }
+        } else {
+          pos = this.position;
+          bear = this.bearing;
+        }
 
         // Per-part banking lean
         let delta = bear - this.prevPartBearings[i];
