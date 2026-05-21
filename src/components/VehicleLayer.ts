@@ -12,6 +12,25 @@ function easeOutBack(t: number): number {
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
+const NON_PAINT_NAMES = [
+  'window', 'glass', 'windshield', 'windscreen', 'visor',
+  'wheel', 'tyre', 'tire', 'hub', 'rim',
+  'chrome', 'headlight', 'taillight', 'blinker', 'lamp', 'light',
+];
+
+function isTintable(mat: THREE.MeshStandardMaterial): boolean {
+  const name = mat.name.toLowerCase();
+  if (NON_PAINT_NAMES.some(p => name.includes(p))) return false;
+  if (mat.transparent && mat.opacity < 0.9) return false;
+  if ((((mat as unknown) as { transmission?: number }).transmission ?? 0) > 0.1) return false;
+  if (mat.metalness > 0.6) return false;
+  if (!mat.map) {
+    const { r, g, b } = mat.color;
+    if (0.299 * r + 0.587 * g + 0.114 * b < 0.07) return false;
+  }
+  return true;
+}
+
 interface TrainPart {
   group: THREE.Group; // at scene origin; camera matrix encodes per-part world transform
   zOffset: number;    // distance behind loco center in normalised model units (positive = behind)
@@ -101,6 +120,7 @@ export class VehicleLayer {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         mats.forEach(m => {
           const mat = m as THREE.MeshStandardMaterial;
+          if (!mat.userData.tintable) return;
           if (this.userTint) {
             mat.color.set(this.userTint);
           } else {
@@ -181,6 +201,7 @@ export class VehicleLayer {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
               const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
+              mat.userData.tintable = isTintable(mat);
               mat.__origColor = mat.color.clone();
               mat.side = THREE.FrontSide;
               mat.transparent = false;
@@ -248,6 +269,7 @@ export class VehicleLayer {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
               const mat = m as THREE.MeshStandardMaterial & { __origColor?: THREE.Color };
+              mat.userData.tintable = isTintable(mat);
               mat.__origColor = mat.color.clone();
               if (colormap) mat.map = colormap;
               mat.side = THREE.FrontSide;
