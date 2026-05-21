@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { VehicleType } from '../types';
 import { getVehicle, vehicleModelUrl } from './vehicles';
 import { extractAtlasPixels, buildTintedTexture } from './tintTexture';
@@ -18,6 +19,7 @@ class ThumbRenderer {
   private scene?: THREE.Scene;
   private cam?: THREE.PerspectiveCamera;
   private loader = new GLTFLoader();
+  private fbxLoader = new FBXLoader();
   private texLoader = new THREE.TextureLoader();
   // Fully prepared models (ready to render)
   private modelCache = new Map<VehicleType, THREE.Group>();
