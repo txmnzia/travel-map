@@ -2,20 +2,36 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { VehicleType } from '../types';
 import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
 
+const TINTS: { label: string; hex: string | null }[] = [
+  { label: 'Default', hex: null },
+  { label: 'White', hex: '#f8fafc' },
+  { label: 'Red', hex: '#ef4444' },
+  { label: 'Blue', hex: '#3b82f6' },
+  { label: 'Yellow', hex: '#fbbf24' },
+  { label: 'Green', hex: '#22c55e' },
+  { label: 'Black', hex: '#1f2937' },
+  { label: 'Orange', hex: '#f97316' },
+  { label: 'Purple', hex: '#a855f7' },
+  { label: 'Silver', hex: '#94a3b8' },
+];
+
 interface Props {
   segmentId: string;
   current: VehicleType;
-  onSelect: (segmentId: string, vehicle: VehicleType) => void;
+  currentColor: string | null;
+  onSelect: (segmentId: string, vehicle: VehicleType, color: string | null) => void;
   onClose: () => void;
 }
 
-export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props) {
+export function VehicleSelector({ segmentId, current, currentColor, onSelect, onClose }: Props) {
   const headerRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const [backdropVisible, setBackdropVisible] = useState(false);
+  const [selVehicle, setSelVehicle] = useState<VehicleType>(current);
+  const [selColor, setSelColor] = useState<string | null>(currentColor ?? null);
   const swipeStartY = useRef(0);
   const swipeDY = useRef(0);
 
@@ -43,6 +59,11 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
 
   const animateCloseRef = useRef(animateClose);
   useEffect(() => { animateCloseRef.current = animateClose; }, [animateClose]);
+
+  const commitAndClose = useCallback((vehicle: VehicleType, color: string | null) => {
+    onSelect(segmentId, vehicle, color);
+    animateCloseRef.current();
+  }, [segmentId, onSelect]);
 
   // Drag-to-dismiss: sheet follows finger; commits close at 80px threshold
   useEffect(() => {
@@ -99,12 +120,12 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
       <div
         ref={sheetRef}
         style={{ transform: 'translateY(100%)' }}
-        className="absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe"
+        className="absolute bottom-0 left-0 right-0 z-[60] bg-navy rounded-t-3xl pb-safe flex flex-col max-h-[90vh]"
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
         {/* Drag handle + title */}
-        <div ref={headerRef} className="cursor-grab">
+        <div ref={headerRef} className="cursor-grab flex-shrink-0">
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-white/30" />
           </div>
@@ -114,7 +135,7 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
         </div>
 
         {/* Scrollable vehicle grid */}
-        <div className="overflow-y-auto max-h-[72vh] px-4 pb-4">
+        <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
           {VEHICLE_CATEGORIES.map(cat => {
             const vehicles = VEHICLES.filter(v => v.category === cat);
             return (
@@ -122,11 +143,11 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
                 <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">{cat}</p>
                 <div className="grid grid-cols-4 gap-2">
                   {vehicles.map(v => {
-                    const selected = v.type === current;
+                    const selected = v.type === selVehicle;
                     return (
                       <button
                         key={v.type}
-                        onClick={() => { onSelect(segmentId, v.type); animateClose(); }}
+                        onClick={() => setSelVehicle(v.type)}
                         className={[
                           'flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95',
                           selected
@@ -143,6 +164,43 @@ export function VehicleSelector({ segmentId, current, onSelect, onClose }: Props
               </div>
             );
           })}
+        </div>
+
+        {/* Colour picker — fixed at bottom */}
+        <div className="flex-shrink-0 px-4 pt-3 pb-2 border-t border-white/10">
+          <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Colour</p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {TINTS.map(tint => {
+              const selected = tint.hex === selColor;
+              return (
+                <button
+                  key={tint.label}
+                  title={tint.label}
+                  onClick={() => {
+                    setSelColor(tint.hex);
+                    commitAndClose(selVehicle, tint.hex);
+                  }}
+                  className={[
+                    'w-9 h-9 rounded-full transition-all active:scale-90 border-2',
+                    selected ? 'border-amber scale-110' : 'border-white/20',
+                  ].join(' ')}
+                  style={
+                    tint.hex
+                      ? { background: tint.hex }
+                      : {
+                          background: 'repeating-conic-gradient(#94a3b8 0% 25%, #1e293b 0% 50%) 0 0 / 12px 12px',
+                        }
+                  }
+                />
+              );
+            })}
+          </div>
+          <button
+            onClick={() => commitAndClose(selVehicle, selColor)}
+            className="w-full py-3 rounded-2xl font-bold text-base bg-amber text-navy active:scale-95 transition-all"
+          >
+            Done
+          </button>
         </div>
       </div>
     </>
