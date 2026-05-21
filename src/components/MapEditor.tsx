@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useCallback,
-  useState,
   forwardRef,
   useImperativeHandle,
 } from 'react';
@@ -11,7 +10,7 @@ import * as turf from '@turf/turf';
 import { TravelState, TravelAction, Segment, Waypoint } from '../types';
 import { getVehicle } from '../utils/vehicles';
 import { computeRoute } from '../utils/routing';
-import { getStyleUrl } from '../utils/mapStyles';
+import { getStyleUrl, MAP_STYLES } from '../utils/mapStyles';
 import type { MapStyleId } from '../types';
 
 export interface MapEditorHandle {
@@ -105,7 +104,6 @@ function createHandleEl(): HTMLElement {
 
 export const MapEditor = forwardRef<MapEditorHandle, Props>(
   ({ state, dispatch, addWaypoint, mapStyle, visible }, ref) => {
-    const [mapLoadFailed, setMapLoadFailed] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -230,20 +228,24 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
         mapReadyRef.current = true;
         loadSucceeded = true;
-        setMapLoadFailed(false);
         requestAnimationFrame(() => { applySize(); map.resize(); });
       });
 
-      // Auto-retry style load on network failure (up to 3 times, then show manual retry)
+      // Auto-retry on style load failure: same style up to 3×, then cycle through other styles
       let loadSucceeded = false;
       let retries = 0;
+      const styleIds = MAP_STYLES.map(s => s.id);
+      let styleIdx = styleIds.indexOf(mapStyle);
       map.on('error', () => {
         if (loadSucceeded) return;
         retries++;
         if (retries <= 3) {
           setTimeout(() => mapRef.current?.setStyle(getStyleUrl(mapStyle)), retries * 1500);
         } else {
-          setMapLoadFailed(true);
+          // Rotate to the next available style
+          styleIdx = (styleIdx + 1) % styleIds.length;
+          const fallbackStyle = styleIds[styleIdx];
+          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(fallbackStyle)), 2000);
         }
       });
 
@@ -658,29 +660,11 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
 
     return (
-      <>
-        <div
-          ref={containerRef}
-          className="absolute top-0 left-0 w-full"
-          style={{ visibility: 'visible' }}
-        />
-        {mapLoadFailed && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-navy">
-            <p className="text-white text-center px-8 text-lg">Map failed to load.<br/><span className="text-white/50 text-sm">Check your connection and try again.</span></p>
-            <button
-              onClick={() => {
-                setMapLoadFailed(false);
-                if (mapRef.current) {
-                  mapRef.current.setStyle(getStyleUrl(mapStyle));
-                }
-              }}
-              className="px-8 py-3 bg-amber text-navy font-bold rounded-2xl text-base active:scale-95 transition-transform"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-      </>
+      <div
+        ref={containerRef}
+        className="absolute top-0 left-0 w-full"
+        style={{ visibility: 'visible' }}
+      />
     );
   },
 );
