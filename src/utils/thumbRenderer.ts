@@ -102,6 +102,17 @@ class ThumbRenderer {
         const maxDim = Math.max(size.x, size.y, size.z, 0.001);
         group.scale.setScalar(1 / maxDim);
         group.position.set(-center.x / maxDim, -center.y / maxDim, -center.z / maxDim);
+        // After re-scaling, bone world matrices have changed but boneInverses were calculated
+        // before scaling — rebind the skeleton so skinning uses the correct post-scale matrices.
+        group.updateMatrixWorld(true);
+        group.traverse(child => {
+          if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+            const sm = child as THREE.SkinnedMesh;
+            sm.skeleton.calculateInverses();
+            sm.bindMatrix.copy(sm.matrixWorld);
+            sm.bindMatrixInverse.copy(sm.matrixWorld).invert();
+          }
+        });
         group.traverse(child => {
           if (child instanceof THREE.Mesh) {
             (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
@@ -229,7 +240,7 @@ class ThumbRenderer {
         }
 
         // rotation.y = 0 → front faces +Z; camera at (1.8,0.8,1.8) is 45° in XZ = 3/4 view
-        model.rotation.y = getVehicle(job.vehicleType).fbxUrl ? Math.PI : 0;
+        model.rotation.y = 0;
         this.scene!.add(model);
         this.ren!.render(this.scene!, this.cam!);
         const dataUrl = this.ren!.domElement.toDataURL('image/png');
