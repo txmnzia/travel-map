@@ -133,7 +133,7 @@ export function MenuDrawer({
 
         {/* Version */}
         <div className="px-6 py-3 border-t border-white/10 pb-safe">
-          <p className="text-white/20 text-xs text-center">Draw a Route · v20260521-18</p>
+          <p className="text-white/20 text-xs text-center">Draw a Route · v20260522-1</p>
         </div>
       </div>
     </>
