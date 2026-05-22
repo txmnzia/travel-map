@@ -378,6 +378,18 @@ export class VehicleLayer {
       group.position.x -= center.x / maxDim;
       group.position.z -= center.z / maxDim;
 
+      // After re-scaling, bone world matrices have changed but boneInverses were calculated
+      // before scaling — rebind the skeleton so skinning uses the correct post-scale matrices.
+      group.updateMatrixWorld(true);
+      group.traverse(child => {
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          const sm = child as THREE.SkinnedMesh;
+          sm.skeleton.calculateInverses();
+          sm.bindMatrix.copy(sm.matrixWorld);
+          sm.bindMatrixInverse.copy(sm.matrixWorld).invert();
+        }
+      });
+
       group.traverse(child => {
         if (child instanceof THREE.Mesh) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
