@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { VehicleType } from '../types';
-import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
+import { VEHICLES, VEHICLE_CATEGORIES, getDisplayVehicles, getVehiclesByGroup } from '../utils/vehicles';
 import { getThumbRenderer } from '../utils/thumbRenderer';
 
 // Kick off parallel loading the moment the selector first mounts
@@ -52,7 +52,7 @@ function ThumbImg({
   return <img src={src} className="w-full aspect-square object-contain" alt="" />;
 }
 
-type Step = 'vehicle' | 'color';
+type Step = 'vehicle' | 'color' | 'skin';
 
 interface Props {
   segmentId: string;
@@ -142,6 +142,12 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
   }, []);
 
   const pickVehicle = (type: VehicleType) => {
+    const cfg = VEHICLES.find(v => v.type === type);
+    if (cfg?.groupId) {
+      setSelVehicle(type);
+      setStep('skin');
+      return;
+    }
     if (NO_COLOUR_VEHICLES.includes(type)) {
       commitAndClose(type, null);
       return;
@@ -176,7 +182,7 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
             <div className="w-10 h-1 rounded-full bg-white/30" />
           </div>
           <div className="flex items-center px-4 py-2 min-h-[48px]">
-            {step === 'color' && (
+            {(step === 'color' || step === 'skin') && (
               <button
                 onClick={goBack}
                 className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white rounded-full bg-white/10 flex-shrink-0"
@@ -185,9 +191,9 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
               </button>
             )}
             <h2 className="flex-1 text-white text-center font-bold text-lg tracking-wide">
-              {step === 'vehicle' ? 'CHOOSE TRANSPORT' : 'CHOOSE COLOUR'}
+              {step === 'vehicle' ? 'CHOOSE TRANSPORT' : step === 'skin' ? 'CHOOSE CHARACTER' : 'CHOOSE COLOUR'}
             </h2>
-            {step === 'color' && <div className="w-8 flex-shrink-0" />}
+            {(step === 'color' || step === 'skin') && <div className="w-8 flex-shrink-0" />}
           </div>
         </div>
 
@@ -195,13 +201,21 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
         {step === 'vehicle' && (
           <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
             {VEHICLE_CATEGORIES.map(cat => {
-              const vehicles = VEHICLES.filter(v => v.category === cat);
+              const vehicles = getDisplayVehicles().filter(v => v.category === cat);
               return (
                 <div key={cat} className="mb-4">
                   <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">{cat}</p>
                   <div className="grid grid-cols-4 gap-2">
                     {vehicles.map(v => {
-                      const selected = v.type === selVehicle;
+                      // For group representatives, highlight if the current vehicle is any member
+                      const groupMembers = v.groupId ? getVehiclesByGroup(v.groupId) : null;
+                      const isGroupSelected = groupMembers
+                        ? groupMembers.some(m => m.type === current)
+                        : v.type === current;
+                      const selected = v.groupId ? isGroupSelected : v.type === selVehicle;
+                      // Show the actual selected skin's thumbnail when a group is active
+                      const thumbType = (v.groupId && isGroupSelected) ? current : v.type;
+                      const displayLabel = v.groupLabel ?? v.label;
                       return (
                         <button
                           key={v.type}
@@ -213,9 +227,9 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
                               : 'bg-white/10 text-white hover:bg-white/20',
                           ].join(' ')}
                         >
-                          <ThumbImg vehicleType={v.type} />
+                          <ThumbImg vehicleType={thumbType} />
                           <span className="text-[11px] font-semibold leading-tight text-center">
-                            {v.label}
+                            {displayLabel}
                           </span>
                         </button>
                       );
@@ -227,7 +241,39 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
           </div>
         )}
 
-        {/* ── Step 2: colour grid ───────────────────────────────────────── */}
+        {/* ── Step 2: skin picker (grouped vehicles, e.g. pedestrians) ─── */}
+        {step === 'skin' && (() => {
+          const groupId = VEHICLES.find(v => v.type === selVehicle)?.groupId ?? '';
+          const skins = getVehiclesByGroup(groupId);
+          return (
+            <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+              <div className="grid grid-cols-4 gap-2">
+                {skins.map(skin => {
+                  const selected = skin.type === current;
+                  return (
+                    <button
+                      key={skin.type}
+                      onClick={() => commitAndClose(skin.type, null)}
+                      className={[
+                        'flex flex-col items-center gap-1 pt-2 pb-2 px-1 rounded-2xl transition-all active:scale-95 overflow-hidden',
+                        selected
+                          ? 'bg-amber text-navy ring-2 ring-white/40'
+                          : 'bg-white/10 text-white hover:bg-white/20',
+                      ].join(' ')}
+                    >
+                      <ThumbImg vehicleType={skin.type} priority />
+                      <span className="text-[11px] font-semibold leading-tight text-center">
+                        {skin.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Step 3: colour grid ───────────────────────────────────────── */}
         {step === 'color' && (
           <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
             <div className="grid grid-cols-4 gap-2">
