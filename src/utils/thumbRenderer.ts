@@ -91,7 +91,6 @@ class ThumbRenderer {
           : Promise.resolve(null as unknown as THREE.Group),
         cfg.skinUrl
           ? new Promise<THREE.Texture>((res, rej) => this.texLoader.load(cfg.skinUrl!, t => {
-              t.flipY = false;
               t.colorSpace = THREE.SRGBColorSpace; res(t);
             }, undefined, rej))
           : Promise.resolve(null as unknown as THREE.Texture),
