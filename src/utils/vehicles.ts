@@ -17,6 +17,10 @@ export interface VehicleConfig {
   animUrl?: string;       // primary animation FBX (run/move)
   idleUrl?: string;       // idle animation FBX (shown when stopped)
   skinUrl?: string;       // skin texture PNG
+  /** Groups multiple skin variants; the first member acts as the grid representative */
+  groupId?: string;
+  groupLabel?: string;    // display label for the representative entry in the main grid
+  groupEmoji?: string;    // display emoji for the representative entry in the main grid
 }
 
 function base(): string {
@@ -89,13 +93,29 @@ export const VEHICLES: VehicleConfig[] = [
       trainUrl('train-electric-subway-c.glb'),
     ],
   },
-  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('criminalMaleA.png')  },
-  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('cyborgFemaleA.png')  },
-  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterFemaleA.png') },
-  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterMaleA.png')  },
+  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('criminalMaleA.png'),  groupId: 'walker', groupLabel: 'Pedestrian', groupEmoji: '🚶' },
+  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('cyborgFemaleA.png'),  groupId: 'walker' },
+  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterFemaleA.png'), groupId: 'walker' },
+  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterMaleA.png'),  groupId: 'walker' },
 ];
 
 export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail', 'People'];
+
+/** Returns one entry per skin group (the first member), plus all ungrouped vehicles. */
+export function getDisplayVehicles(): VehicleConfig[] {
+  const seen = new Set<string>();
+  return VEHICLES.filter(v => {
+    if (!v.groupId) return true;
+    if (seen.has(v.groupId)) return false;
+    seen.add(v.groupId);
+    return true;
+  });
+}
+
+/** Returns all vehicles that belong to the given groupId. */
+export function getVehiclesByGroup(groupId: string): VehicleConfig[] {
+  return VEHICLES.filter(v => v.groupId === groupId);
+}
 
 const DEFAULT_VEHICLE = VEHICLES[0];
 
