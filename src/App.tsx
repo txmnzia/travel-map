@@ -127,7 +127,6 @@ export default function App() {
               segmentId={vehicleSelector.segmentId}
               current={vehicleSelector.vehicle}
               currentColor={vehicleSelector.color}
-              currentAnimation={vehicleSelector.animation}
               onSelect={(segmentId, vehicle, color, animation) => {
                 dispatch({ type: 'SET_VEHICLE', segmentId, vehicle });
                 dispatch({ type: 'SET_COLOR', segmentId, color });

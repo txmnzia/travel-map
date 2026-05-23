@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { VehicleType } from '../types';
-import { VEHICLES, VEHICLE_CATEGORIES, WalkerAnim } from '../utils/vehicles';
+import { VEHICLES, VEHICLE_CATEGORIES } from '../utils/vehicles';
 import { getThumbRenderer } from '../utils/thumbRenderer';
 
 // Kick off parallel loading the moment the selector first mounts
@@ -52,18 +52,17 @@ function ThumbImg({
   return <img src={src} className="w-full aspect-square object-contain" alt="" />;
 }
 
-type Step = 'vehicle' | 'color' | 'anim';
+type Step = 'vehicle' | 'color';
 
 interface Props {
   segmentId: string;
   current: VehicleType;
   currentColor: string | null;
-  currentAnimation: string | null;
   onSelect: (segmentId: string, vehicle: VehicleType, color: string | null, animation: string | null) => void;
   onClose: () => void;
 }
 
-export function VehicleSelector({ segmentId, current, currentColor, currentAnimation, onSelect, onClose }: Props) {
+export function VehicleSelector({ segmentId, current, currentColor, onSelect, onClose }: Props) {
   const headerRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -72,7 +71,6 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
   const [backdropVisible, setBackdropVisible] = useState(false);
   const [step, setStep] = useState<Step>('vehicle');
   const [selVehicle, setSelVehicle] = useState<VehicleType>(current);
-  const [selAnims, setSelAnims] = useState<WalkerAnim[] | null>(null);
   const swipeStartY = useRef(0);
   const swipeDY = useRef(0);
 
@@ -144,13 +142,6 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
   }, []);
 
   const pickVehicle = (type: VehicleType) => {
-    const cfg = VEHICLES.find(v => v.type === type);
-    if (cfg?.walkerAnims) {
-      setSelVehicle(type);
-      setSelAnims(cfg.walkerAnims);
-      setStep('anim');
-      return;
-    }
     if (NO_COLOUR_VEHICLES.includes(type)) {
       commitAndClose(type, null);
       return;
@@ -185,7 +176,7 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
             <div className="w-10 h-1 rounded-full bg-white/30" />
           </div>
           <div className="flex items-center px-4 py-2 min-h-[48px]">
-            {(step === 'color' || step === 'anim') && (
+            {step === 'color' && (
               <button
                 onClick={goBack}
                 className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white rounded-full bg-white/10 flex-shrink-0"
@@ -194,9 +185,9 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
               </button>
             )}
             <h2 className="flex-1 text-white text-center font-bold text-lg tracking-wide">
-              {step === 'vehicle' ? 'CHOOSE TRANSPORT' : step === 'anim' ? 'CHOOSE ANIMATION' : 'CHOOSE COLOUR'}
+              {step === 'vehicle' ? 'CHOOSE TRANSPORT' : 'CHOOSE COLOUR'}
             </h2>
-            {(step === 'color' || step === 'anim') && <div className="w-8 flex-shrink-0" />}
+            {step === 'color' && <div className="w-8 flex-shrink-0" />}
           </div>
         </div>
 
@@ -264,31 +255,6 @@ export function VehicleSelector({ segmentId, current, currentColor, currentAnima
           </div>
         )}
 
-        {/* ── Step 2b: animation picker (walkers only) ──────────────────── */}
-        {step === 'anim' && selAnims && (
-          <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
-            <div className="grid grid-cols-3 gap-3">
-              {selAnims.map(anim => {
-                const selected = anim.key === currentAnimation;
-                return (
-                  <button
-                    key={anim.key}
-                    onClick={() => commitAndClose(selVehicle, null, anim.key)}
-                    className={[
-                      'flex flex-col items-center gap-2 py-5 px-2 rounded-2xl transition-all active:scale-95',
-                      selected
-                        ? 'bg-amber text-navy ring-2 ring-white/40'
-                        : 'bg-white/10 text-white hover:bg-white/20',
-                    ].join(' ')}
-                  >
-                    <span className="text-4xl leading-none">{anim.emoji}</span>
-                    <span className="text-sm font-semibold">{anim.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
