@@ -15,7 +15,7 @@ interface Props {
 function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null, animation: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.fbxUrl) {
-    layer.loadFBX(cfg.fbxUrl, resolveAnimUrl(cfg), cfg.skinUrl ?? null, cfg.scaleFactor);
+    layer.loadFBX(cfg.fbxUrl, resolveAnimUrl(cfg), cfg.skinUrl ?? null, cfg.scaleFactor, cfg.idleUrl ?? null);
   } else if (cfg.partUrls) {
     layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
@@ -190,6 +190,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const stopAnimation = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
     setIsPlaying(false);
+    vehicleLayerRef.current?.pauseAnimation();
   }, []);
 
   const animate = useCallback((timestamp: number) => {
@@ -320,6 +321,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.bearing = startBearing;
         const cfg = getVehicle(firstSeg.vehicle);
         applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null, firstSeg.animation ?? null);
+        layer.resumeAnimation();
         lastVehicleTypeRef.current = firstSeg.vehicle;
         lastColorRef.current = firstSeg.color ?? null;
       }
