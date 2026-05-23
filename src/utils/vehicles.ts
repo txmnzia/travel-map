@@ -14,7 +14,8 @@ export interface VehicleConfig {
   /** Shared texture atlas to inject into all materials after loading */
   colormapUrl?: string;
   fbxUrl?: string;        // FBX file containing the skinned character mesh
-  animUrl?: string;       // animation FBX
+  animUrl?: string;       // primary animation FBX (run/move)
+  idleUrl?: string;       // idle animation FBX (shown when stopped)
   skinUrl?: string;       // skin texture PNG
 }
 
@@ -88,10 +89,10 @@ export const VEHICLES: VehicleConfig[] = [
       trainUrl('train-electric-subway-c.glb'),
     ],
   },
-  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('criminalMaleA.png')  },
-  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('cyborgFemaleA.png')  },
-  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterFemaleA.png') },
-  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), skinUrl: walkUrl('skaterMaleA.png')  },
+  { type: 'walker-criminal',  label: 'Criminal',    emoji: '😈', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('criminalMaleA.png')  },
+  { type: 'walker-cyborg',    label: 'Cyborg',      emoji: '🤖', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('cyborgFemaleA.png')  },
+  { type: 'walker-skater-f',  label: 'Skater Girl', emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterFemaleA.png') },
+  { type: 'walker-skater-m',  label: 'Skater Guy',  emoji: '🛹', category: 'People', scaleFactor: 1.0, fbxUrl: walkUrl('characterMedium.fbx'), animUrl: walkUrl('run.fbx'), idleUrl: walkUrl('idle.fbx'), skinUrl: walkUrl('skaterMaleA.png')  },
 ];
 
 export const VEHICLE_CATEGORIES: VehicleCategory[] = ['Cars', 'Boats', 'Rail', 'People'];

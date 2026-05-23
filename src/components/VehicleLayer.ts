@@ -55,6 +55,8 @@ export class VehicleLayer {
   private readonly loader = new GLTFLoader();
   private readonly fbxLoader = new FBXLoader();
   private fbxMixer: THREE.AnimationMixer | null = null;
+  private fbxRunAction: THREE.AnimationAction | null = null;
+  private fbxIdleAction: THREE.AnimationAction | null = null;
   private loadingUrl = '';
 
   scaleFactor = 1;
@@ -332,8 +334,8 @@ export class VehicleLayer {
     }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
   }
 
-  loadFBX(fbxUrl: string, animUrl: string | null, skinUrl: string | null, scaleFactor = 1) {
-    const key = 'fbx:' + fbxUrl + ':' + (animUrl ?? '') + ':' + (skinUrl ?? '');
+  loadFBX(fbxUrl: string, animUrl: string | null, skinUrl: string | null, scaleFactor = 1, idleUrl: string | null = null) {
+    const key = 'fbx:' + fbxUrl + ':' + (animUrl ?? '') + ':' + (skinUrl ?? '') + ':' + (idleUrl ?? '');
     if (key === this.loadingUrl) return;
     this.loadingUrl = key;
     this.scaleFactor = scaleFactor;
@@ -342,6 +344,8 @@ export class VehicleLayer {
     this.partDisappearStarts = [];
     this.singleDisappearStart = 0;
     if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
+    this.fbxRunAction = null;
+    this.fbxIdleAction = null;
     if (this.currentTintedTex) { this.currentTintedTex.dispose(); this.currentTintedTex = null; }
 
     if (this.model) {
@@ -359,15 +363,16 @@ export class VehicleLayer {
         ))
       : Promise.resolve(null);
 
-    // Use separate FBXLoader instances per load — a shared instance corrupts state when
-    // two loads are in-flight concurrently (character mesh + animation file).
     Promise.all([
       new Promise<THREE.Group>((res, rej) => new FBXLoader().load(fbxUrl, res, undefined, rej)),
       animUrl
         ? new Promise<THREE.Group | null>((res, rej) => new FBXLoader().load(animUrl, (g) => res(g), undefined, rej))
         : Promise.resolve(null),
+      idleUrl
+        ? new Promise<THREE.Group | null>((res, rej) => new FBXLoader().load(idleUrl, (g) => res(g), undefined, rej))
+        : Promise.resolve(null),
       skinPromise,
-    ]).then(([group, animGroup, skin]) => {
+    ]).then(([group, animGroup, idleGroup, skin]) => {
       if (this.loadingUrl !== key) return;
 
       const box = new THREE.Box3().setFromObject(group);
@@ -406,13 +411,24 @@ export class VehicleLayer {
         }
       });
 
-      // Pick the real animation clip — FBX files typically have a "Targeting Pose" bind-pose
-      // clip first (index 0) followed by the actual motion clip (index 1+). Skip the pose clip.
-      const allClips = [...(animGroup?.animations ?? []), ...group.animations];
-      const clip = allClips.find(a => !a.name.includes('Targeting Pose')) ?? allClips[0] ?? null;
-      if (clip) {
+      const pickClip = (group: THREE.Group | null) => {
+        const clips = group?.animations ?? [];
+        return clips.find(a => !a.name.includes('Targeting Pose')) ?? clips[0] ?? null;
+      };
+
+      const runClip = pickClip(animGroup) ?? pickClip(group);
+      const idleClip = pickClip(idleGroup);
+
+      if (runClip || idleClip) {
         this.fbxMixer = new THREE.AnimationMixer(group);
-        this.fbxMixer.clipAction(clip).play();
+        if (runClip) {
+          this.fbxRunAction = this.fbxMixer.clipAction(runClip);
+          this.fbxRunAction.play();
+        }
+        if (idleClip) {
+          this.fbxIdleAction = this.fbxMixer.clipAction(idleClip);
+          this.fbxIdleAction.enabled = false;
+        }
       }
 
       const wrapper = new THREE.Group();
@@ -586,12 +602,31 @@ export class VehicleLayer {
     this.map.triggerRepaint();
   }
 
+  /** Switch to idle animation (crossfade). Call when playback is paused/stopped. */
+  pauseAnimation() {
+    if (!this.fbxMixer || !this.fbxIdleAction) return;
+    this.fbxIdleAction.enabled = true;
+    this.fbxIdleAction.reset().fadeIn(0.3).play();
+    this.fbxRunAction?.fadeOut(0.3);
+    this.map?.triggerRepaint();
+  }
+
+  /** Switch back to run animation (crossfade). Call when playback resumes. */
+  resumeAnimation() {
+    if (!this.fbxMixer || !this.fbxRunAction) return;
+    this.fbxRunAction.reset().fadeIn(0.3).play();
+    this.fbxIdleAction?.fadeOut(0.3);
+    this.map?.triggerRepaint();
+  }
+
   onRemove() {
     if (this.model) this.scene.remove(this.model);
     if (this.outgoing) this.scene.remove(this.outgoing);
     this._clearTrainParts();
     this.currentTintedTex?.dispose();
     if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
+    this.fbxRunAction = null;
+    this.fbxIdleAction = null;
     this.renderer.dispose();
   }
 }
