@@ -84,6 +84,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
+  const progressRef = useRef<number>(0);     // mirrors progress state, readable in callbacks
+  const resumeFromRef = useRef<number>(0);   // saved progress when stopped mid-route
   const animZoomRef = useRef<number>(10);
   const totalKmRef = useRef<number>(0);
   const segmentBreakpointsRef = useRef<number[]>([]);
@@ -190,6 +192,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const stopAnimation = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
     setIsPlaying(false);
+    resumeFromRef.current = progressRef.current < 1 ? progressRef.current : 0;
     vehicleLayerRef.current?.pauseAnimation();
   }, []);
 
@@ -203,6 +206,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const prog = elapsed / (duration * 1000);
     const displayProg = Math.min(prog, 1);
 
+    progressRef.current = displayProg;
     setProgress(displayProg);
     setKmTraveled(Math.round(displayProg * totalKmRef.current));
 
@@ -290,49 +294,66 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   const play = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
-    setProgress(0);
-    setKmTraveled(0);
-    startTimeRef.current = 0;
-    if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }
+
+    const resumeFrom = resumeFromRef.current;
+    const isResume = resumeFrom > 0 && resumeFrom < 1;
+    resumeFromRef.current = 0;
+
+    if (!isResume) {
+      setProgress(0);
+      progressRef.current = 0;
+      setKmTraveled(0);
+      if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }
+    }
 
     if (map) {
-      const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
-      trailSrc?.setData({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: [] },
-        properties: {},
-      });
+      if (!isResume) {
+        const trailSrc = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
+        trailSrc?.setData({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: [] },
+          properties: {},
+        });
+      }
 
-      const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+      const startProg = isResume ? resumeFrom : 0;
+      const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, startProg);
       smoothBearingRef.current = startBearing;
-      map.easeTo({
-        center: startPos,
-        bearing: startBearing,
-        pitch: 60,
-        zoom: animZoomRef.current,
-        duration: 400,
-      });
 
-      // Reload first vehicle
+      if (!isResume) {
+        map.easeTo({
+          center: startPos,
+          bearing: startBearing,
+          pitch: 60,
+          zoom: animZoomRef.current,
+          duration: 400,
+        });
+      }
+
       const layer = vehicleLayerRef.current;
-      const firstSeg = state.segments[0];
-      if (layer && firstSeg) {
-        layer.position = fullRoute[0];
+      const seg = isResume
+        ? (vehicleAtProgress(state, resumeFrom, segmentBreakpointsRef.current) ?? state.segments[0])
+        : state.segments[0];
+      if (layer && seg) {
+        layer.position = startPos;
         layer.bearing = startBearing;
-        const cfg = getVehicle(firstSeg.vehicle);
-        applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null, firstSeg.animation ?? null);
+        if (!isResume) {
+          const cfg = getVehicle(seg.vehicle);
+          applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
+        }
         layer.resumeAnimation();
-        lastVehicleTypeRef.current = firstSeg.vehicle;
-        lastColorRef.current = firstSeg.color ?? null;
+        lastVehicleTypeRef.current = seg.vehicle;
+        lastColorRef.current = seg.color ?? null;
       }
     }
 
     setIsPlaying(true);
     animFrameRef.current = requestAnimationFrame((ts) => {
-      startTimeRef.current = ts;
+      // Offset startTime so elapsed maps to resumeFrom
+      startTimeRef.current = ts - resumeFrom * duration * 1000;
       animate(ts);
     });
-  }, [animate, map, fullRoute, state]);
+  }, [animate, map, fullRoute, state, duration]);
 
   // Keep playRef current so auto-play timer fires with latest play callback
   useEffect(() => { playRef.current = play; }, [play]);
