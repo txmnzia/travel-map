@@ -427,7 +427,10 @@ export class VehicleLayer {
         }
         if (idleClip) {
           this.fbxIdleAction = this.fbxMixer.clipAction(idleClip);
-          this.fbxIdleAction.enabled = false;
+          // Start at weight 0 (run dominates) but keep active in mixer
+          // so crossfading never requires reset() — which snaps to bind pose.
+          this.fbxIdleAction.weight = 0;
+          this.fbxIdleAction.play();
         }
       }
 
@@ -605,17 +608,18 @@ export class VehicleLayer {
   /** Switch to idle animation (crossfade). Call when playback is paused/stopped. */
   pauseAnimation() {
     if (!this.fbxMixer || !this.fbxIdleAction) return;
-    this.fbxIdleAction.enabled = true;
-    this.fbxIdleAction.reset().fadeIn(0.3).play();
+    // Never reset() — that snaps the skeleton to bind pose for one frame.
+    // Both actions stay active in the mixer; we just shift weights.
     this.fbxRunAction?.fadeOut(0.3);
+    this.fbxIdleAction.fadeIn(0.3);
     this.map?.triggerRepaint();
   }
 
   /** Switch back to run animation (crossfade). Call when playback resumes. */
   resumeAnimation() {
     if (!this.fbxMixer || !this.fbxRunAction) return;
-    this.fbxRunAction.reset().fadeIn(0.3).play();
     this.fbxIdleAction?.fadeOut(0.3);
+    this.fbxRunAction.fadeIn(0.3);
     this.map?.triggerRepaint();
   }
 
