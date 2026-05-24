@@ -57,6 +57,7 @@ export class VehicleLayer {
   private fbxMixer: THREE.AnimationMixer | null = null;
   private fbxRunAction: THREE.AnimationAction | null = null;
   private fbxIdleAction: THREE.AnimationAction | null = null;
+  private fbxIsPaused = false;
   private loadingUrl = '';
 
   scaleFactor = 1;
@@ -419,6 +420,7 @@ export class VehicleLayer {
       const runClip = pickClip(animGroup) ?? pickClip(group);
       const idleClip = pickClip(idleGroup);
 
+      this.fbxIsPaused = false;
       if (runClip || idleClip) {
         this.fbxMixer = new THREE.AnimationMixer(group);
         if (runClip) {
@@ -608,16 +610,16 @@ export class VehicleLayer {
   /** Switch to idle animation (crossfade). Call when playback is paused/stopped. */
   pauseAnimation() {
     if (!this.fbxMixer || !this.fbxIdleAction) return;
-    // Never reset() — that snaps the skeleton to bind pose for one frame.
-    // Both actions stay active in the mixer; we just shift weights.
+    this.fbxIsPaused = true;
     this.fbxRunAction?.fadeOut(0.3);
     this.fbxIdleAction.fadeIn(0.3);
     this.map?.triggerRepaint();
   }
 
-  /** Switch back to run animation (crossfade). Call when playback resumes. */
+  /** Switch back to run animation (crossfade). No-op if not actually paused. */
   resumeAnimation() {
-    if (!this.fbxMixer || !this.fbxRunAction) return;
+    if (!this.fbxMixer || !this.fbxRunAction || !this.fbxIsPaused) return;
+    this.fbxIsPaused = false;
     this.fbxIdleAction?.fadeOut(0.3);
     this.fbxRunAction.fadeIn(0.3);
     this.map?.triggerRepaint();
