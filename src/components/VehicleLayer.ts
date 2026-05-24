@@ -446,6 +446,12 @@ export class VehicleLayer {
     }).catch(err => console.warn('VehicleLayer: failed to load FBX', fbxUrl, err));
   }
 
+  /** Reset disappear-animation state so a replay starts with the model fully visible. */
+  resetForReplay() {
+    this.singleDisappearStart = 0;
+    this.partDisappearStarts = this.trainParts.map(() => 0);
+  }
+
   private _clearTrainParts() {
     this.trainParts.forEach(p => this.scene.remove(p.group));
     this.trainParts = [];

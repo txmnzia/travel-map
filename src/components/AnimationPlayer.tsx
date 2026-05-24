@@ -79,6 +79,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
@@ -94,6 +95,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const lastColorRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const videoBlobRef = useRef<{ blob: Blob; mimeType: string; ext: string } | null>(null);
   const playRef = useRef<() => void>(() => {});
   const cameraModeRef = useRef<'static' | 'pov'>('static');
   const arrivalFlagRef = useRef<maplibregl.Marker | null>(null);
@@ -194,6 +196,36 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     setIsPlaying(false);
     resumeFromRef.current = progressRef.current < 1 ? progressRef.current : 0;
     vehicleLayerRef.current?.pauseAnimation();
+  }, []);
+
+  const closeVideoPreview = useCallback(() => {
+    setVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    videoBlobRef.current = null;
+  }, []);
+
+  const shareVideo = useCallback(async () => {
+    const info = videoBlobRef.current;
+    if (!info) return;
+    const file = new File([info.blob], `travel-video.${info.ext}`, { type: info.mimeType });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nav = navigator as any;
+    if (nav.canShare && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: 'My Trip' });
+        return;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    // Desktop fallback
+    const url = URL.createObjectURL(info.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `travel-video.${info.ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }, []);
 
   const animate = useCallback((timestamp: number) => {
@@ -338,6 +370,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         layer.position = startPos;
         layer.bearing = startBearing;
         if (!isResume) {
+          layer.resetForReplay();
           const cfg = getVehicle(seg.vehicle);
           applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
         } else {
@@ -387,9 +420,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     }
 
     const stream = canvas.captureStream(30);
-
     const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
     const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm';
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
 
     const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
     chunksRef.current = [];
@@ -400,25 +433,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-
-      // iOS Safari ignores the `download` attribute and doesn't support anchor-triggered
-      // downloads for blob URLs — open the video directly so the user can use Share to save it.
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
-      if (isIOS) {
-        window.open(url, '_blank');
-      } else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `travel-video.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-
-      // Delay revocation — the browser needs the URL alive until the download/open starts.
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      videoBlobRef.current = { blob, mimeType, ext };
+      setVideoUrl(URL.createObjectURL(blob));
       setIsRecording(false);
     };
 
@@ -431,6 +447,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const hasRoute = fullRoute.length >= 2;
 
   return (
+    <>
     <div className="absolute inset-0 z-20 flex flex-col pointer-events-none">
       {/* Back button + distance badge — float over the map */}
       <div className="flex items-start justify-between px-4 pt-safe mt-3 pointer-events-auto">
@@ -545,5 +562,44 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         )}
       </div>
     </div>
+
+    {videoUrl && (
+      <div className="absolute inset-0 z-30 bg-black flex flex-col pointer-events-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-safe mt-3 flex-shrink-0">
+          <button
+            onClick={closeVideoPreview}
+            className="w-11 h-11 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-white text-xl shadow-lg active:scale-95 transition-transform"
+          >
+            ←
+          </button>
+          <span className="text-white font-bold text-base">Your Video</span>
+          <div className="w-11" />
+        </div>
+
+        {/* Video player */}
+        <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+          <video
+            key={videoUrl}
+            src={videoUrl}
+            controls
+            autoPlay
+            playsInline
+            className="w-full max-h-full rounded-2xl"
+          />
+        </div>
+
+        {/* Save button */}
+        <div className="px-4 pb-safe flex-shrink-0 pt-3">
+          <button
+            onClick={shareVideo}
+            className="w-full py-3 rounded-2xl font-bold text-base bg-amber text-navy active:scale-95 transition-all"
+          >
+            📤 Save to Camera Roll
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
