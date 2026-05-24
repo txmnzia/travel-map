@@ -340,8 +340,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         if (!isResume) {
           const cfg = getVehicle(seg.vehicle);
           applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
+        } else {
+          layer.resumeAnimation();
         }
-        layer.resumeAnimation();
         lastVehicleTypeRef.current = seg.vehicle;
         lastColorRef.current = seg.color ?? null;
       }
@@ -380,6 +381,11 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (!map || fullRoute.length < 2) return;
 
     const canvas = map.getCanvas();
+    if (!canvas.captureStream || typeof MediaRecorder === 'undefined') {
+      alert('Video recording is not supported in this browser. Try Chrome or Firefox on desktop.');
+      return;
+    }
+
     const stream = canvas.captureStream(30);
 
     const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
@@ -395,11 +401,24 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `travel-video.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+      // iOS Safari ignores the `download` attribute and doesn't support anchor-triggered
+      // downloads for blob URLs — open the video directly so the user can use Share to save it.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
+      if (isIOS) {
+        window.open(url, '_blank');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `travel-video.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Delay revocation — the browser needs the URL alive until the download/open starts.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
       setIsRecording(false);
     };
 
