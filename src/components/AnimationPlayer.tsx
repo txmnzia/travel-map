@@ -79,7 +79,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
 
   const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
@@ -198,11 +198,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     vehicleLayerRef.current?.pauseAnimation();
   }, []);
 
-  const closeVideoPreview = useCallback(() => {
-    setVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-    videoBlobRef.current = null;
-  }, []);
-
   const shareVideo = useCallback(async () => {
     const info = videoBlobRef.current;
     if (!info) return;
@@ -212,20 +207,22 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (nav.canShare && nav.canShare({ files: [file] })) {
       try {
         await nav.share({ files: [file], title: 'My Trip' });
-        return;
       } catch (e) {
-        if ((e as Error).name === 'AbortError') return;
+        if ((e as Error).name === 'AbortError') return; // user cancelled — keep button ready
       }
+    } else {
+      // Desktop: anchor download
+      const url = URL.createObjectURL(info.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `travel-video.${info.ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
     }
-    // Desktop fallback
-    const url = URL.createObjectURL(info.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `travel-video.${info.ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    videoBlobRef.current = null;
+    setVideoReady(false);
   }, []);
 
   const animate = useCallback((timestamp: number) => {
@@ -434,7 +431,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
       videoBlobRef.current = { blob, mimeType, ext };
-      setVideoUrl(URL.createObjectURL(blob));
+      setVideoReady(true);
       setIsRecording(false);
     };
 
@@ -447,7 +444,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const hasRoute = fullRoute.length >= 2;
 
   return (
-    <>
     <div className="absolute inset-0 z-20 flex flex-col pointer-events-none">
       {/* Back button + distance badge — float over the map */}
       <div className="flex items-start justify-between px-4 pt-safe mt-3 pointer-events-auto">
@@ -542,16 +538,18 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           </button>
 
           <button
-            onClick={downloadVideo}
+            onClick={videoReady ? shareVideo : downloadVideo}
             disabled={!hasRoute || isRecording}
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
-              hasRoute && !isRecording
-                ? 'bg-blue-500 text-white'
-                : 'bg-white/20 text-white/40 cursor-not-allowed',
+              videoReady
+                ? 'bg-amber text-navy animate-pulse'
+                : hasRoute && !isRecording
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
           >
-            {isRecording ? '⏺ Recording…' : '⬇ Download'}
+            {isRecording ? '⏺ Recording…' : videoReady ? '💾 Save to Photos' : '⬇ Download'}
           </button>
         </div>
 
@@ -562,44 +560,5 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         )}
       </div>
     </div>
-
-    {videoUrl && (
-      <div className="absolute inset-0 z-30 bg-black flex flex-col pointer-events-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-safe mt-3 flex-shrink-0">
-          <button
-            onClick={closeVideoPreview}
-            className="w-11 h-11 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-white text-xl shadow-lg active:scale-95 transition-transform"
-          >
-            ←
-          </button>
-          <span className="text-white font-bold text-base">Your Video</span>
-          <div className="w-11" />
-        </div>
-
-        {/* Video player */}
-        <div className="flex-1 flex items-center justify-center p-4 min-h-0">
-          <video
-            key={videoUrl}
-            src={videoUrl}
-            controls
-            autoPlay
-            playsInline
-            className="w-full max-h-full rounded-2xl"
-          />
-        </div>
-
-        {/* Save button */}
-        <div className="px-4 pb-safe flex-shrink-0 pt-3">
-          <button
-            onClick={shareVideo}
-            className="w-full py-3 rounded-2xl font-bold text-base bg-amber text-navy active:scale-95 transition-all"
-          >
-            📤 Save to Camera Roll
-          </button>
-        </div>
-      </div>
-    )}
-    </>
   );
 }
