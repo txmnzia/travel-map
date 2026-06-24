@@ -553,11 +553,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
               videoReady
-                ? 'bg-amber text-navy animate-pulse'
-                : 'bg-white/20 text-white/40 cursor-not-allowed',
+                ? 'bg-white/30 text-white'
+                : 'bg-white/20 cursor-not-allowed',
+              isPlaying ? 'text-white/60' : 'text-white/40',
             ].join(' ')}
           >
-            {videoReady ? '💾 Save to Photos' : '⬇ Download'}
+            {isPlaying && !videoReady ? 'Preparing…' : videoReady ? '⬇ Download' : '⬇ Download'}
           </button>
         </div>
 
