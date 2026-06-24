@@ -78,10 +78,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [cameraMode, setCameraMode] = useState<'static' | 'pov'>('static');
   const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
-
-  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
+  const [videoReady, setVideoReady] = useState(false);  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -96,6 +93,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const videoBlobRef = useRef<{ blob: Blob; mimeType: string; ext: string } | null>(null);
+  const recordingCompletedRef = useRef(false);
   const playRef = useRef<() => void>(() => {});
   const cameraModeRef = useRef<'static' | 'pov'>('static');
   const arrivalFlagRef = useRef<maplibregl.Marker | null>(null);
@@ -196,6 +194,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     setIsPlaying(false);
     resumeFromRef.current = progressRef.current < 1 ? progressRef.current : 0;
     vehicleLayerRef.current?.pauseAnimation();
+    // Discard partial recording — only a full animation completion produces a saveable video
+    recordingCompletedRef.current = false;
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setVideoReady(false);
+    videoBlobRef.current = null;
   }, []);
 
   const shareVideo = useCallback(async () => {
@@ -315,6 +320,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         .addTo(map);
 
       if (mediaRecorderRef.current?.state === 'recording') {
+        recordingCompletedRef.current = true;
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
       }
     }
@@ -323,6 +329,14 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
   const play = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
+
+    // Stop any in-progress recording and start fresh
+    recordingCompletedRef.current = false;
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setVideoReady(false);
+    videoBlobRef.current = null;
 
     const resumeFrom = resumeFromRef.current;
     const isResume = resumeFrom > 0 && resumeFrom < 1;
@@ -376,6 +390,36 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         lastVehicleTypeRef.current = seg.vehicle;
         lastColorRef.current = seg.color ?? null;
       }
+
+      // Start background recording silently — video is ready when animation completes
+      const canvas = map.getCanvas();
+      if (canvas.captureStream && typeof MediaRecorder !== 'undefined') {
+        try {
+          const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+          const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm';
+          const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+          const stream = canvas.captureStream(30);
+          chunksRef.current = [];
+          const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunksRef.current.push(e.data);
+          };
+          recorder.onstop = () => {
+            if (recordingCompletedRef.current && chunksRef.current.length > 0) {
+              const blob = new Blob(chunksRef.current, { type: mimeType });
+              if (blob.size > 1000) {
+                videoBlobRef.current = { blob, mimeType, ext };
+                setVideoReady(true);
+              }
+            }
+            chunksRef.current = [];
+          };
+          mediaRecorderRef.current = recorder;
+          recorder.start();
+        } catch {
+          // MediaRecorder unavailable on this browser — download button stays disabled
+        }
+      }
     }
 
     setIsPlaying(true);
@@ -406,40 +450,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally empty — fire once on mount
-
-  const downloadVideo = useCallback(async () => {
-    if (!map || fullRoute.length < 2) return;
-
-    const canvas = map.getCanvas();
-    if (!canvas.captureStream || typeof MediaRecorder === 'undefined') {
-      alert('Video recording is not supported in this browser. Try Chrome or Firefox on desktop.');
-      return;
-    }
-
-    const stream = canvas.captureStream(30);
-    const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
-    const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm';
-    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-
-    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
-    chunksRef.current = [];
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
-      videoBlobRef.current = { blob, mimeType, ext };
-      setVideoReady(true);
-      setIsRecording(false);
-    };
-
-    mediaRecorderRef.current = recorder;
-    recorder.start();
-    setIsRecording(true);
-    play();
-  }, [map, fullRoute, play]);
 
   const hasRoute = fullRoute.length >= 2;
 
@@ -538,18 +548,16 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
           </button>
 
           <button
-            onClick={videoReady ? shareVideo : downloadVideo}
-            disabled={!hasRoute || isRecording}
+            onClick={videoReady ? shareVideo : undefined}
+            disabled={!videoReady}
             className={[
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
               videoReady
                 ? 'bg-amber text-navy animate-pulse'
-                : hasRoute && !isRecording
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white/20 text-white/40 cursor-not-allowed',
+                : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
           >
-            {isRecording ? '⏺ Recording…' : videoReady ? '💾 Save to Photos' : '⬇ Download'}
+            {videoReady ? '💾 Save to Photos' : '⬇ Download'}
           </button>
         </div>
 
