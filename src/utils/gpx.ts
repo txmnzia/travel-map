@@ -62,11 +62,18 @@ export function parseGpx(text: string): GpxImportResult | null {
   const keyPts = adaptiveSimplify(allPts, 15);
   if (keyPts.length < 2) return null;
 
-  const lngs = allPts.map(p => p[0]);
-  const lats = allPts.map(p => p[1]);
+  // Plain loop, not Math.min(...spread): real-world GPX tracks can exceed the
+  // engine's argument-count limit (~65k) and throw RangeError on spread.
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of allPts) {
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
   const bounds: [[number, number], [number, number]] = [
-    [Math.min(...lngs), Math.min(...lats)],
-    [Math.max(...lngs), Math.max(...lats)],
+    [minLng, minLat],
+    [maxLng, maxLat],
   ];
 
   const ts = Date.now();
@@ -100,7 +107,9 @@ export function parseGpx(text: string): GpxImportResult | null {
       route,
     });
 
-    searchFrom = fromIdx;
+    // Continue the next search from this segment's end — starting from fromIdx
+    // could snap a later waypoint to an earlier pass on self-crossing tracks
+    searchFrom = toIdx;
   }
 
   return { waypoints, segments, bounds };
