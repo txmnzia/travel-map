@@ -1,7 +1,6 @@
 import {
   useEffect,
   useRef,
-  useCallback,
   forwardRef,
   useImperativeHandle,
 } from 'react';
@@ -43,7 +42,6 @@ function createWaypointEl(
   segments: Segment[],
   waypointId: string,
   isLast: boolean,
-  isFirst: boolean,
 ): HTMLElement {
   const el = document.createElement('div');
   el.style.cssText = 'cursor: grab; user-select: none; touch-action: manipulation;';
@@ -114,7 +112,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const segmentsRef = useRef(state.segments);
     const waypointsRef = useRef(state.waypoints);
     const dispatchRef = useRef(dispatch);
-    const routeLineClickedRef = useRef(false);
     // Key of the handle marker currently being dragged — used to skip setLngLat during drag
     const draggingHandleRef = useRef<string | null>(null);
 
@@ -404,13 +401,12 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       // Add or update markers
       waypoints.forEach((wp, idx) => {
         const isLast = idx === waypoints.length - 1;
-        const isFirst = idx === 0;
 
         if (existing.has(wp.id)) {
           // Refresh element (vehicle icon may have changed) by recreating marker.
           // Hide briefly to prevent a 1-frame flash at the map origin (0,0).
           existing.get(wp.id)!.remove();
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
+          const el = createWaypointEl(waypoints, segments, wp.id, isLast);
           el.style.visibility = 'hidden';
           setupWaypointEl(el, wp.id, segments, isLast);
           const newMarker = new maplibregl.Marker({ element: el, draggable: true, anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center' })
@@ -424,7 +420,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           });
           existing.set(wp.id, newMarker);
         } else {
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
+          const el = createWaypointEl(waypoints, segments, wp.id, isLast);
           setupWaypointEl(el, wp.id, segments, isLast);
           const marker = new maplibregl.Marker({
             element: el,
