@@ -78,6 +78,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
@@ -132,6 +133,14 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     map.addLayer(layer as any);
     vehicleLayerRef.current = layer;
 
+    // Surface model-load failures instead of animating an invisible vehicle silently
+    let errToastTimer: ReturnType<typeof setTimeout> | null = null;
+    layer.onLoadError = () => {
+      setLoadError('Could not load the vehicle model. Check your connection and try again.');
+      if (errToastTimer) clearTimeout(errToastTimer);
+      errToastTimer = setTimeout(() => setLoadError(null), 5000);
+    };
+
     // Give the layer the full route so train wagons can look up their individual positions
     layer.route = fullRoute;
     layer.totalKm = totalKmRef.current;
@@ -184,7 +193,19 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         properties: {},
       });
 
+      if (errToastTimer) clearTimeout(errToastTimer);
       cancelAnimationFrame(animFrameRef.current);
+
+      // Tear down any in-flight recording — otherwise the canvas capture
+      // pipeline and encoder keep running after leaving preview
+      recordingCompletedRef.current = false;
+      const rec = mediaRecorderRef.current;
+      if (rec) {
+        if (rec.state === 'recording') rec.stop();
+        rec.stream.getTracks().forEach(t => t.stop());
+        mediaRecorderRef.current = null;
+      }
+
       map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,7 +314,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       easing: (t) => t,
     });
 
-    const done = layer?.isFullyDone() ?? false;
+    // Done when every part has shrunk out — or, if no visual ever loaded (model
+    // 404/parse failure), once progress passes the end plus a small grace period.
+    // Without the fallback a failed load would leave this rAF loop (and the
+    // recorder) running forever.
+    const done = layer
+      ? (layer.isFullyDone() || (prog >= 1.05 && !layer.hasVisual()))
+      : prog >= 1.05;
     if (!done) {
       animFrameRef.current = requestAnimationFrame(animate);
     } else {
@@ -411,6 +438,8 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               }
             }
             chunksRef.current = [];
+            // Release the canvas capture pipeline (each play() creates a fresh stream)
+            stream.getTracks().forEach(t => t.stop());
           };
           mediaRecorderRef.current = recorder;
           recorder.start();
@@ -470,6 +499,15 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
 
         <div className="w-11" />
       </div>
+
+      {/* Model-load error toast */}
+      {loadError && (
+        <div className="flex justify-center px-4 mt-2 pointer-events-none">
+          <div className="bg-red-600 text-white text-sm px-4 py-2 rounded-xl shadow-lg max-w-xs text-center">
+            {loadError}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1" />
 
@@ -552,11 +590,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
               videoReady
                 ? 'bg-white/30 text-white'
-                : 'bg-white/20 cursor-not-allowed',
-              isPlaying ? 'text-white/60' : 'text-white/40',
+                : isPlaying
+                  ? 'bg-white/20 text-white/60 cursor-not-allowed'
+                  : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
           >
-            {isPlaying && !videoReady ? 'Preparing…' : videoReady ? '⬇ Download' : '⬇ Download'}
+            {!videoReady && isPlaying ? 'Preparing…' : '⬇ Download'}
           </button>
         </div>
 
