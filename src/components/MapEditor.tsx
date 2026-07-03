@@ -146,7 +146,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         center: [10, 25],
         zoom: 2,
         preserveDrawingBuffer: true,
-        attributionControl: false,
+        // OSM/OpenFreeMap and Carto tiles require attribution — keep it visible
+        attributionControl: { compact: true },
       });
 
       mapRef.current = map;
@@ -284,10 +285,17 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Style requested most recently — the constructor already loads the initial
+    // one, so the effect below must not re-set it on mount (that forced a full
+    // "rebuilding the style from scratch" reload before the first load finished)
+    const appliedStyleRef = useRef(mapStyle);
+
     // Update map style
     useEffect(() => {
       const map = mapRef.current;
       if (!map) return;
+      if (appliedStyleRef.current === mapStyle) return;
+      appliedStyleRef.current = mapStyle;
       map.setStyle(getStyleUrl(mapStyle));
       map.once('styledata', () => {
         mapReadyRef.current = true;
@@ -404,46 +412,60 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         });
       };
 
-      // Add or update markers
+      // Add or update markers. A marker only needs rebuilding when its appearance
+      // or its long-press payload changes — recreating every marker on every state
+      // change tore down DOM/listeners mid-interaction and needed a visibility
+      // hack to hide the resulting flash. The signature captures everything the
+      // element and its handlers close over.
       waypoints.forEach((wp, idx) => {
         const isLast = idx === waypoints.length - 1;
+        const isFlag = isLast && waypoints.length > 1;
+        const outgoingSeg = segments.find(s => s.fromId === wp.id);
+        const incomingSeg = segments.find(s => s.toId === wp.id);
+        const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
+        const emoji = !outgoingSeg ? '📍' : vehicleChanged ? getVehicle(outgoingSeg.vehicle).emoji : '';
+        const sig = [
+          isFlag ? 'flag' : 'dot',
+          isFlag ? '' : emoji,
+          outgoingSeg?.id ?? '',
+          outgoingSeg?.vehicle ?? '',
+          outgoingSeg?.color ?? '',
+        ].join('|');
 
-        if (existing.has(wp.id)) {
-          // Refresh element (vehicle icon may have changed) by recreating marker.
-          // Hide briefly to prevent a 1-frame flash at the map origin (0,0).
-          existing.get(wp.id)!.remove();
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast);
-          el.style.visibility = 'hidden';
-          setupWaypointEl(el, wp.id, segments, isLast);
-          const newMarker = new maplibregl.Marker({ element: el, draggable: true, anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center' })
-            .setLngLat([wp.lng, wp.lat])
-            .addTo(map);
-          requestAnimationFrame(() => { el.style.visibility = ''; });
-          newMarker.on('drag', makeLiveDragHandler(newMarker, wp.id));
-          newMarker.on('dragend', () => {
-            const ll = newMarker.getLngLat();
-            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
-          });
-          existing.set(wp.id, newMarker);
-        } else {
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast);
-          setupWaypointEl(el, wp.id, segments, isLast);
-          const marker = new maplibregl.Marker({
-            element: el,
-            draggable: true,
-            anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center',
-          })
-            .setLngLat([wp.lng, wp.lat])
-            .addTo(map);
-
-          marker.on('drag', makeLiveDragHandler(marker, wp.id));
-          marker.on('dragend', () => {
-            const ll = marker.getLngLat();
-            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
-          });
-
-          existing.set(wp.id, marker);
+        const prev = existing.get(wp.id);
+        if (prev && prev.getElement().dataset.sig === sig) {
+          prev.setLngLat([wp.lng, wp.lat]);
+          return;
         }
+
+        const isReplacing = !!prev;
+        prev?.remove();
+
+        const el = createWaypointEl(waypoints, segments, wp.id, isLast);
+        el.dataset.sig = sig;
+        setupWaypointEl(el, wp.id, segments, isLast);
+        if (isReplacing) {
+          // Hide briefly to prevent a 1-frame flash at the map origin (0,0)
+          el.style.visibility = 'hidden';
+        }
+        const marker = new maplibregl.Marker({
+          element: el,
+          draggable: true,
+          anchor: isFlag ? 'bottom' : 'center',
+        })
+          .setLngLat([wp.lng, wp.lat])
+          .addTo(map);
+        if (isReplacing) {
+          requestAnimationFrame(() => { el.style.visibility = ''; });
+        }
+
+        marker.on('drag', makeLiveDragHandler(marker, wp.id));
+        marker.on('dragend', () => {
+          const ll = marker.getLngLat();
+          dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
+        });
+
+        existing.set(wp.id, marker);
       });
 
       // Show/hide markers based on mode
@@ -629,14 +651,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           existing.set(handleKey, marker);
         }
       });
-
-      // Remove handles for waypoints that no longer exist
-      existing.forEach((marker, key) => {
-        if (!currentSegIds.has(key.split(':')[0])) {
-          marker.remove();
-          existing.delete(key);
-        }
-      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.segments, visible]);
 
@@ -645,10 +659,13 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       const map = mapRef.current;
       if (!map || !mapReadyRef.current) return;
 
+      // Retry until the source exists (it disappears briefly on style change),
+      // but cancel on unmount/re-run so the poll can't run forever
+      let timer: ReturnType<typeof setTimeout> | null = null;
       const waitForStyle = () => {
         const src = map.getSource('routes') as maplibregl.GeoJSONSource | undefined;
         if (!src) {
-          setTimeout(waitForStyle, 100);
+          timer = setTimeout(waitForStyle, 100);
           return;
         }
         const features = state.segments
@@ -658,6 +675,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         src.setData(turf.featureCollection(features));
       };
       waitForStyle();
+      return () => { if (timer) clearTimeout(timer); };
     }, [state.segments]);
 
 
