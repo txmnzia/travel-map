@@ -1,5 +1,5 @@
 import { useReducer, useCallback } from 'react';
-import { TravelState, TravelAction, Waypoint, Segment, VehicleType } from '../types';
+import { TravelState, TravelAction, Waypoint, Segment } from '../types';
 import { computeRoute } from '../utils/routing';
 
 const MAX_HISTORY = 30;

@@ -12,7 +12,7 @@ interface Props {
   onBack: () => void;
 }
 
-function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null, animation: string | null = null) {
+function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null, _animation: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.fbxUrl) {
     layer.loadFBX(cfg.fbxUrl, resolveAnimUrl(cfg), cfg.skinUrl ?? null, cfg.scaleFactor, cfg.idleUrl ?? null);
@@ -72,13 +72,14 @@ function routeZoom(totalKm: number): number {
 
 export function AnimationPlayer({ map, state, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(10);
   const [userScale, setUserScale] = useState(1);
   const [cameraMode, setCameraMode] = useState<'static' | 'pov'>('static');
   const [showCounter, setShowCounter] = useState(true);
   const [kmTraveled, setKmTraveled] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -241,7 +242,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const displayProg = Math.min(prog, 1);
 
     progressRef.current = displayProg;
-    setProgress(displayProg);
     setKmTraveled(Math.round(displayProg * totalKmRef.current));
 
     const { position, bearing } = interpolateAlong(fullRoute, displayProg);
@@ -324,7 +324,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, fullRoute, duration, state]);
 
   const play = useCallback(() => {
@@ -343,7 +342,6 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     resumeFromRef.current = 0;
 
     if (!isResume) {
-      setProgress(0);
       progressRef.current = 0;
       setKmTraveled(0);
       if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }

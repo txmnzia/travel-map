@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { MapStyleId } from '../types';
 import { MAP_STYLES } from '../utils/mapStyles';
+import { VERSION } from '../version';
 
 interface Props {
   current: MapStyleId;
@@ -120,7 +121,7 @@ export function MapStylePicker({ current, onChange, onClose }: Props) {
             </button>
           ))}
         </div>
-        <p className="text-white/20 text-xs text-center pb-4">v20260624-1</p>
+        <p className="text-white/20 text-xs text-center pb-4">{VERSION}</p>
       </div>
     </>
   );

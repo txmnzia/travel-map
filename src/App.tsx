@@ -10,7 +10,7 @@ import { AppMode, MapStyleId, VehicleType } from './types';
 
 export default function App() {
   const mapEditorRef = useRef<MapEditorHandle>(null);
-  const { state, dispatch, addWaypoint, canUndo, canRedo } = useWaypoints();
+  const { state, dispatch, addWaypoint, canUndo } = useWaypoints();
 
   const [mode, setMode] = useState<AppMode>('edit');
   const [mapStyle, setMapStyle] = useState<MapStyleId>('bright');
