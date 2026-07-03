@@ -1,26 +1,42 @@
-import * as turf from '@turf/turf';
+import { lineString, point } from '@turf/helpers';
+import { length } from '@turf/length';
+import { along } from '@turf/along';
+import { lineSliceAlong } from '@turf/line-slice-along';
+import { bearing as turfBearing } from '@turf/bearing';
+import { distance } from '@turf/distance';
+import { greatCircle } from '@turf/great-circle';
 import { VehicleType } from '../types';
+import { getVehicle } from './vehicles';
 
 /**
  * Compute a curved polyline for a segment.
  * - Any vehicle with handles: quadratic/cubic Bezier through the handles
+ * - Boats on long crossings: great-circle arc
  * - Others: straight line
  */
 export function computeRoute(
   from: [number, number],
   to: [number, number],
-  _vehicle: VehicleType,
+  vehicle: VehicleType,
   handles: [number, number][],
 ): [number, number][] {
   if (handles.length > 0) {
     return bezierCurve(from, handles, to, 80);
+  }
+  // Boats follow great circles on long crossings — a straight lng/lat chord
+  // across an ocean looks wrong on the projected map
+  if (
+    getVehicle(vehicle).category === 'Boats' &&
+    distance(point(from), point(to), { units: 'kilometers' }) > 300
+  ) {
+    return greatCircleArc(from, to);
   }
   return [from, to];
 }
 
 export function greatCircleArc(from: [number, number], to: [number, number]): [number, number][] {
   try {
-    const gc = turf.greatCircle(turf.point(from), turf.point(to), { npoints: 80 });
+    const gc = greatCircle(point(from), point(to), { npoints: 80 });
     const geom = gc.geometry;
     if (geom.type === 'LineString') {
       return geom.coordinates as [number, number][];
@@ -83,17 +99,17 @@ export function interpolateAlong(
 ): { position: [number, number]; bearing: number } {
   if (route.length < 2) return { position: route[0] ?? [0, 0], bearing: 0 };
 
-  const line = turf.lineString(route);
-  const total = turf.length(line, { units: 'kilometers' });
+  const line = lineString(route);
+  const total = length(line, { units: 'kilometers' });
   const dist = Math.min(progress, 0.9999) * total;
 
-  const pt = turf.along(line, dist, { units: 'kilometers' });
+  const pt = along(line, dist, { units: 'kilometers' });
   const pos = pt.geometry.coordinates as [number, number];
 
   // Bearing: look slightly ahead for smooth rotation
   const aheadDist = Math.min(dist + total * 0.01, total * 0.9999);
-  const ahead = turf.along(line, aheadDist, { units: 'kilometers' });
-  const bearing = turf.bearing(pt, ahead);
+  const ahead = along(line, aheadDist, { units: 'kilometers' });
+  const bearing = turfBearing(pt, ahead);
 
   return { position: pos, bearing };
 }
@@ -104,10 +120,10 @@ export function sliceRoute(
   progress: number,
 ): [number, number][] {
   if (route.length < 2 || progress <= 0) return [];
-  const line = turf.lineString(route);
-  const total = turf.length(line, { units: 'kilometers' });
+  const line = lineString(route);
+  const total = length(line, { units: 'kilometers' });
   const dist = Math.min(progress, 0.9999) * total;
-  const sliced = turf.lineSliceAlong(line, 0, dist, { units: 'kilometers' });
+  const sliced = lineSliceAlong(line, 0, dist, { units: 'kilometers' });
   return sliced.geometry.coordinates as [number, number][];
 }
 
@@ -130,7 +146,7 @@ export class RouteSampler {
     this.cum = new Array(route.length).fill(0);
     let acc = 0;
     for (let i = 1; i < route.length; i++) {
-      acc += turf.distance(turf.point(route[i - 1]), turf.point(route[i]), { units: 'kilometers' });
+      acc += distance(point(route[i - 1]), point(route[i]), { units: 'kilometers' });
       this.cum[i] = acc;
     }
     this.totalKm = acc;
@@ -166,7 +182,7 @@ export class RouteSampler {
     const dist = Math.min(progress, 0.9999) * this.totalKm;
     const pos = this.positionAt(dist);
     const ahead = this.positionAt(Math.min(dist + this.totalKm * 0.01, this.totalKm * 0.9999));
-    const bearing = turf.bearing(turf.point(pos), turf.point(ahead));
+    const bearing = turfBearing(point(pos), point(ahead));
     return { position: pos, bearing };
   }
 

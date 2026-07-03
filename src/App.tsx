@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import { MapEditor, MapEditorHandle } from './components/MapEditor';
-import { AnimationPlayer } from './components/AnimationPlayer';
-import { VehicleSelector } from './components/VehicleSelector';
 import { MapStylePicker } from './components/MapStylePicker';
+
+// Lazy-load the two components that pull in Three.js (~⅓ of the bundle) —
+// neither is needed until the user opens the selector or presses Play
+const AnimationPlayer = lazy(() =>
+  import('./components/AnimationPlayer').then(m => ({ default: m.AnimationPlayer })));
+const VehicleSelector = lazy(() =>
+  import('./components/VehicleSelector').then(m => ({ default: m.VehicleSelector })));
 import { Toolbar } from './components/Toolbar';
 import { useWaypoints } from './hooks/useWaypoints';
 import { parseGpx } from './utils/gpx';
@@ -128,16 +133,18 @@ export default function App() {
 
           {/* Vehicle selector bottom sheet */}
           {vehicleSelector && (
-            <VehicleSelector
-              segmentId={vehicleSelector.segmentId}
-              current={vehicleSelector.vehicle}
-              currentColor={vehicleSelector.color}
-              onSelect={(segmentId, vehicle, color) => {
-                // Single atomic action → one undo entry per selector interaction
-                dispatch({ type: 'SET_VEHICLE', segmentId, vehicle, color });
-              }}
-              onClose={() => setVehicleSelector(null)}
-            />
+            <Suspense fallback={null}>
+              <VehicleSelector
+                segmentId={vehicleSelector.segmentId}
+                current={vehicleSelector.vehicle}
+                currentColor={vehicleSelector.color}
+                onSelect={(segmentId, vehicle, color) => {
+                  // Single atomic action → one undo entry per selector interaction
+                  dispatch({ type: 'SET_VEHICLE', segmentId, vehicle, color });
+                }}
+                onClose={() => setVehicleSelector(null)}
+              />
+            </Suspense>
           )}
 
           {/* Map style picker */}
@@ -155,11 +162,13 @@ export default function App() {
 
       {/* Preview mode overlays */}
       {mode === 'preview' && (
-        <AnimationPlayer
-          map={map}
-          state={state}
-          onBack={exitPreview}
-        />
+        <Suspense fallback={null}>
+          <AnimationPlayer
+            map={map}
+            state={state}
+            onBack={exitPreview}
+          />
+        </Suspense>
       )}
     </div>
   );

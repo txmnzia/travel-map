@@ -1,4 +1,5 @@
-import * as turf from '@turf/turf';
+import { lineString } from '@turf/helpers';
+import { simplify } from '@turf/simplify';
 import { Waypoint, Segment } from '../types';
 
 export interface GpxImportResult {
@@ -23,16 +24,16 @@ function extractPoints(xml: Document): [number, number][] {
 
 function adaptiveSimplify(pts: [number, number][], target = 15): [number, number][] {
   if (pts.length <= target) return pts;
-  const line = turf.lineString(pts);
+  const line = lineString(pts);
   let lo = 0, hi = 10;
   for (let iter = 0; iter < 24; iter++) {
     const mid = (lo + hi) / 2;
-    const s = turf.simplify(line, { tolerance: mid, highQuality: false });
+    const s = simplify(line, { tolerance: mid, highQuality: false });
     if (s.geometry.coordinates.length > target) lo = mid;
     else hi = mid;
     if (hi - lo < 1e-6) break;
   }
-  const result = turf.simplify(line, { tolerance: hi, highQuality: true });
+  const result = simplify(line, { tolerance: hi, highQuality: true });
   return result.geometry.coordinates as [number, number][];
 }
 
