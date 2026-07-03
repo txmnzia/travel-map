@@ -1,5 +1,21 @@
 # TravelBoast (travel-map) — Codebase Audit: Post-Mortem & Remediation Plan
 
+> **Remediation status (2026-07-03):** all phases implemented on this branch.
+>
+> | Phase | Commit | Findings closed |
+> |-------|--------|-----------------|
+> | 0 — process guardrails | `39c2a7a` | F23, F24, F26, F27 |
+> | 1 — P0 bugs | `76e8f73` | F1, F2, F3, F4 |
+> | 2 — state model | `cdf07c4` | F5, F6, F7, F13, F19 |
+> | 3 — GPX robustness | `4fa42e6` | F8, F21 (F20: by-design comment) |
+> | 4 — recording fidelity + perf | `0a0950e` | F9 (option A), F11, F12, F28 (duration-lock) |
+> | 5 — map editor hardening | `33d2a33` | F10, F15, F16, F17, F18 |
+> | 6 — bundle/asset diet | (this commit) | F14, F22, F25 |
+>
+> Remaining open items: F20 full mitigation (imported-route preservation on edit)
+> and the cosmetic F28 leftovers (backdrop tint consistency, two-finger-tap guard) —
+> both deliberately deferred as noted in the plan below.
+
 **Date:** 2026-07-03 · **Scope:** full source (~3,900 LoC), build config, CI, assets
 **Method:** line-by-line review of all 17 source files, clean build + typecheck, and
 **live browser verification** of suspected bugs with Playwright against a running dev

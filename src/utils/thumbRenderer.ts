@@ -19,7 +19,6 @@ class ThumbRenderer {
   private scene?: THREE.Scene;
   private cam?: THREE.PerspectiveCamera;
   private loader = new GLTFLoader();
-  private fbxLoader = new FBXLoader();
   private texLoader = new THREE.TextureLoader();
   // Fully prepared models (ready to render)
   private modelCache = new Map<VehicleType, THREE.Group>();

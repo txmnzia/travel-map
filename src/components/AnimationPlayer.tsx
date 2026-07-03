@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import * as turf from '@turf/turf';
+import { lineString } from '@turf/helpers';
+import { length } from '@turf/length';
 import { TravelState } from '../types';
 import { getVehicle, vehicleModelUrl, VehicleConfig } from '../utils/vehicles';
 import { RouteSampler } from '../utils/routing';
@@ -78,7 +79,7 @@ function computeSegmentBreakpoints(state: TravelState): number[] {
   if (state.segments.length === 0) return [];
   const lengths = state.segments.map(seg =>
     seg.route.length >= 2
-      ? turf.length(turf.lineString(seg.route), { units: 'kilometers' })
+      ? length(lineString(seg.route), { units: 'kilometers' })
       : 0,
   );
   const total = lengths.reduce((a, b) => a + b, 0);
