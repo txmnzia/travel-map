@@ -18,7 +18,7 @@ export function computeRoute(
   return [from, to];
 }
 
-function greatCircleArc(from: [number, number], to: [number, number]): [number, number][] {
+export function greatCircleArc(from: [number, number], to: [number, number]): [number, number][] {
   try {
     const gc = turf.greatCircle(turf.point(from), turf.point(to), { npoints: 80 });
     const geom = gc.geometry;

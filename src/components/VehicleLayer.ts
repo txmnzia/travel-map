@@ -488,7 +488,7 @@ export class VehicleLayer {
         if (t >= 1) this.trainAnimStart = 0;
       }
 
-      this.trainParts.forEach(({ group, zOffset }, i) => {
+      this.trainParts.forEach(({ zOffset }, i) => {
         const offsetKm = zOffset * desiredMeters / 1000;
         const rawProg = this.route.length >= 2 && this.totalKm > 0
           ? this.progress - offsetKm / this.totalKm
