@@ -53,13 +53,17 @@ export default function App() {
 
   const handleGpxImport = useCallback(
     (file: File) => {
+      const showError = (msg: string) => {
+        setGpxError(msg);
+        setTimeout(() => setGpxError(null), 4000);
+      };
       const reader = new FileReader();
+      reader.onerror = () => showError('Could not read the file. Please try again.');
       reader.onload = (e) => {
         const text = e.target?.result as string;
         const result = parseGpx(text);
         if (!result) {
-          setGpxError('Could not read GPX file. Make sure it contains track or route points.');
-          setTimeout(() => setGpxError(null), 4000);
+          showError('Could not read GPX file. Make sure it contains track or route points.');
           return;
         }
         dispatch({ type: 'IMPORT_ROUTE', waypoints: result.waypoints, segments: result.segments });
