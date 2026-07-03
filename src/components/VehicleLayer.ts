@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import * as turf from '@turf/turf';
+import { point } from '@turf/helpers';
+import { destination } from '@turf/destination';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import maplibregl from 'maplibre-gl';
@@ -70,7 +71,6 @@ export class VehicleLayer {
   private prevPartBearings: number[] = [];
 
   private readonly loader = new GLTFLoader();
-  private readonly fbxLoader = new FBXLoader();
   private fbxMixer: THREE.AnimationMixer | null = null;
   private fbxRunAction: THREE.AnimationAction | null = null;
   private fbxIdleAction: THREE.AnimationAction | null = null;
@@ -541,7 +541,7 @@ export class VehicleLayer {
             // Wagon is behind the route start — extrapolate backwards
             const { position: startPos, bearing: startBear } = sampler.at(0);
             const behindKm = -rawProg * totalKm;
-            const pt = turf.destination(turf.point(startPos), behindKm, startBear + 180, { units: 'kilometers' });
+            const pt = destination(point(startPos), behindKm, startBear + 180, { units: 'kilometers' });
             pos = pt.geometry.coordinates as [number, number];
             bear = startBear;
           } else {

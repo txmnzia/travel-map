@@ -11,7 +11,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@turf/turf": "^7.1.0",
+    "@turf/along": "^7.3.5",
+    "@turf/bearing": "^7.3.5",
+    "@turf/destination": "^7.3.5",
+    "@turf/distance": "^7.3.5",
+    "@turf/great-circle": "^7.3.5",
+    "@turf/helpers": "^7.3.5",
+    "@turf/length": "^7.3.5",
+    "@turf/line-slice-along": "^7.3.5",
+    "@turf/nearest-point-on-line": "^7.3.5",
+    "@turf/simplify": "^7.3.5",
     "maplibre-gl": "^4.7.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

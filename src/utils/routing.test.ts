@@ -7,6 +7,19 @@ describe('computeRoute', () => {
     expect(route).toEqual([[0, 0], [10, 10]]);
   });
 
+  it('routes boats along a great circle on long crossings', () => {
+    // New York → Lisbon: the great circle bulges far north of the straight chord
+    const route = computeRoute([-74, 40.7], [-9.1, 38.7], 'ocean-liner', []);
+    expect(route.length).toBeGreaterThan(2);
+    // The arc must bulge clearly north of both endpoints (chord max = 40.7°N)
+    const maxLat = Math.max(...route.map(p => p[1]));
+    expect(maxLat).toBeGreaterThan(43);
+    // Cars on the same span stay straight
+    expect(computeRoute([-74, 40.7], [-9.1, 38.7], 'sedan', [])).toHaveLength(2);
+    // Short boat hops stay straight too
+    expect(computeRoute([0, 0], [0.5, 0.5], 'rowboat', [])).toHaveLength(2);
+  });
+
   it('returns a Bézier polyline through a handle', () => {
     const route = computeRoute([0, 0], [10, 0], 'sedan', [[5, 5]]);
     expect(route.length).toBe(81);

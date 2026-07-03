@@ -5,10 +5,11 @@ import {
   useImperativeHandle,
 } from 'react';
 import maplibregl from 'maplibre-gl';
-import * as turf from '@turf/turf';
+import { featureCollection, lineString, point } from '@turf/helpers';
+import { nearestPointOnLine } from '@turf/nearest-point-on-line';
 import { TravelState, TravelAction, Segment, Waypoint } from '../types';
 import { getVehicle } from '../utils/vehicles';
-import { computeRoute } from '../utils/routing';
+import { computeRoute, routeMidpoint } from '../utils/routing';
 import { getStyleUrl, MAP_STYLES } from '../utils/mapStyles';
 import type { MapStyleId } from '../types';
 
@@ -204,8 +205,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           if (!seg || seg.route.length < 2) return;
 
           // Snap click to nearest point on the route geometry
-          const clickPt = turf.point([e.lngLat.lng, e.lngLat.lat]);
-          const nearest = turf.nearestPointOnLine(turf.lineString(seg.route), clickPt);
+          const clickPt = point([e.lngLat.lng, e.lngLat.lat]);
+          const nearest = nearestPointOnLine(lineString(seg.route), clickPt);
           const [lng, lat] = nearest.geometry.coordinates;
 
           const waypoint = {
@@ -304,11 +305,11 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           const segments = segmentsRef.current;
           const features = segments
             .filter(s => s.route.length >= 2)
-            .map(s => turf.lineString(s.route, { segmentId: s.id }));
+            .map(s => lineString(s.route, { segmentId: s.id }));
 
           map.addSource('routes', {
             type: 'geojson',
-            data: turf.featureCollection(features),
+            data: featureCollection(features),
           });
           map.addLayer({
             id: 'routes-line',
@@ -384,16 +385,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
               to = [ll.lng, ll.lat];
             } else {
               if (s.route.length < 2) return null;
-              return turf.lineString(s.route, { segmentId: s.id });
+              return lineString(s.route, { segmentId: s.id });
             }
 
             const route = computeRoute(from, to, s.vehicle, s.handles);
-            return turf.lineString(route, { segmentId: s.id });
+            return lineString(route, { segmentId: s.id });
           })
           .filter((f): f is NonNullable<typeof f> => f !== null);
 
         const src = mapRef.current?.getSource('routes') as maplibregl.GeoJSONSource | undefined;
-        src?.setData(turf.featureCollection(features) as GeoJSON.FeatureCollection);
+        src?.setData(featureCollection(features) as GeoJSON.FeatureCollection);
 
         // Move handle markers in real-time for segments connected to the dragged waypoint
         segs.forEach(s => {
@@ -607,14 +608,17 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         const fLng = fromWp?.lng ?? 0, fLat = fromWp?.lat ?? 0;
         const tLng = toWp?.lng ?? 0,  tLat = toWp?.lat ?? 0;
 
-        // Visual position: Bézier midpoint P(0.5) = 0.25A + 0.5H + 0.25B when curved,
-        // geographic midpoint for straight segments.
+        // Visual position: Bézier midpoint P(0.5) = 0.25A + 0.5H + 0.25B when curved;
+        // otherwise the actual route midpoint so the handle sits ON the drawn line
+        // (great-circle boat arcs and imported GPX paths are not straight).
         const handlePos: [number, number] = seg.handles.length > 0
           ? [
               0.25 * fLng + 0.5 * seg.handles[0][0] + 0.25 * tLng,
               0.25 * fLat + 0.5 * seg.handles[0][1] + 0.25 * tLat,
             ]
-          : [(fLng + tLng) / 2, (fLat + tLat) / 2];
+          : seg.route.length > 2
+            ? routeMidpoint(seg.route)
+            : [(fLng + tLng) / 2, (fLat + tLat) / 2];
 
         if (existing.has(handleKey)) {
           if (draggingHandleRef.current !== handleKey) {
@@ -670,9 +674,9 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         }
         const features = state.segments
           .filter(s => s.route.length >= 2)
-          .map(s => turf.lineString(s.route, { segmentId: s.id }));
+          .map(s => lineString(s.route, { segmentId: s.id }));
 
-        src.setData(turf.featureCollection(features));
+        src.setData(featureCollection(features));
       };
       waitForStyle();
       return () => { if (timer) clearTimeout(timer); };
