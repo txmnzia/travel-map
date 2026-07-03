@@ -58,7 +58,7 @@ interface Props {
   segmentId: string;
   current: VehicleType;
   currentColor: string | null;
-  onSelect: (segmentId: string, vehicle: VehicleType, color: string | null, animation: string | null) => void;
+  onSelect: (segmentId: string, vehicle: VehicleType, color: string | null) => void;
   onClose: () => void;
 }
 
@@ -101,8 +101,8 @@ export function VehicleSelector({ segmentId, current, currentColor, onSelect, on
   const animateCloseRef = useRef(animateClose);
   useEffect(() => { animateCloseRef.current = animateClose; }, [animateClose]);
 
-  const commitAndClose = useCallback((vehicle: VehicleType, color: string | null, animation: string | null = null) => {
-    onSelect(segmentId, vehicle, color, animation);
+  const commitAndClose = useCallback((vehicle: VehicleType, color: string | null) => {
+    onSelect(segmentId, vehicle, color);
     animateCloseRef.current();
   }, [segmentId, onSelect]);
 
