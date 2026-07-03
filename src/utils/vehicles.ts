@@ -123,10 +123,6 @@ export function getVehicle(type: VehicleType): VehicleConfig {
   return VEHICLES.find(v => v.type === type) ?? DEFAULT_VEHICLE;
 }
 
-export function resolveAnimUrl(cfg: VehicleConfig): string | null {
-  return cfg.animUrl ?? null;
-}
-
 export function vehicleModelUrl(type: VehicleType): string {
   // BASE_URL is injected by Vite at build time (e.g. "/travel-map/" for GitHub Pages)
   const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';

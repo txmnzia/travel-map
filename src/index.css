@@ -68,9 +68,9 @@
 .maplibregl-canvas {
   outline: none;
 }
-.maplibregl-ctrl-bottom-left,
+/* Keep attribution visible (OSM/Carto license requirement) but clear of the toolbar */
 .maplibregl-ctrl-bottom-right {
-  display: none;
+  bottom: 84px;
 }
 
 /* Smooth range slider */

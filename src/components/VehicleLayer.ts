@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import * as turf from '@turf/turf';
+import { point } from '@turf/helpers';
+import { destination } from '@turf/destination';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import maplibregl from 'maplibre-gl';
-import { interpolateAlong } from '../utils/routing';
+import { RouteSampler } from '../utils/routing';
 import { extractAtlasPixels, buildTintedTexture } from '../utils/tintTexture';
 
 const textureLoader = new THREE.TextureLoader();
@@ -12,6 +13,23 @@ function easeOutBack(t: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+/** Free GPU resources of a detached model hierarchy (geometry, materials, textures). */
+function disposeObject3D(root: THREE.Object3D) {
+  root.traverse(obj => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh && !(obj as THREE.SkinnedMesh).isSkinnedMesh) return;
+    mesh.geometry?.dispose();
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mats.forEach(m => {
+      const mat = m as THREE.MeshStandardMaterial;
+      // dispose() is idempotent, so shared textures (train colormap) are safe
+      mat.map?.dispose();
+      (mat.userData.origMap as THREE.Texture | undefined)?.dispose();
+      mat.dispose();
+    });
+  });
 }
 
 interface TrainPart {
@@ -53,7 +71,6 @@ export class VehicleLayer {
   private prevPartBearings: number[] = [];
 
   private readonly loader = new GLTFLoader();
-  private readonly fbxLoader = new FBXLoader();
   private fbxMixer: THREE.AnimationMixer | null = null;
   private fbxRunAction: THREE.AnimationAction | null = null;
   private fbxIdleAction: THREE.AnimationAction | null = null;
@@ -66,9 +83,8 @@ export class VehicleLayer {
   bearing = 0;
   bobEnabled = false;
 
-  // Route for train articulation — set by AnimationPlayer each frame
-  route: [number, number][] = [];
-  totalKm = 0;
+  // Route lookup for train articulation — set once by AnimationPlayer on mount
+  sampler: RouteSampler | null = null;
   progress = 0;
 
   // Single-model lean
@@ -83,6 +99,14 @@ export class VehicleLayer {
   // User-chosen colour tint (null = use model's original colours)
   userTint: string | null = null;
   private currentTintedTex: THREE.CanvasTexture | null = null;
+
+  /** Called when a model fails to load, so the UI can surface the failure. */
+  onLoadError: ((url: string) => void) | null = null;
+
+  /** True while any visual (model, outgoing model, or train part) is in the scene. */
+  hasVisual(): boolean {
+    return this.model !== null || this.outgoing !== null || this.trainParts.length > 0;
+  }
 
   /** Returns true once every part has fully shrunk out. */
   isFullyDone(): boolean {
@@ -174,7 +198,7 @@ export class VehicleLayer {
     if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
 
     if (this.model) {
-      if (this.outgoing) this.scene.remove(this.outgoing);
+      if (this.outgoing) { this.scene.remove(this.outgoing); disposeObject3D(this.outgoing); }
       this.outgoing = this.model;
       this.outgoingAnimStart = performance.now();
       this.model = null;
@@ -228,7 +252,10 @@ export class VehicleLayer {
         this.map?.triggerRepaint();
       },
       undefined,
-      (err) => console.warn('VehicleLayer: failed to load', url, err),
+      (err) => {
+        console.warn('VehicleLayer: failed to load', url, err);
+        this.onLoadError?.(url);
+      },
     );
   }
 
@@ -242,8 +269,8 @@ export class VehicleLayer {
     this.partDisappearStarts = [];
     this.singleDisappearStart = 0;
     if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
-    if (this.outgoing) { this.scene.remove(this.outgoing); this.outgoing = null; }
-    if (this.model) { this.scene.remove(this.model); this.model = null; }
+    if (this.outgoing) { this.scene.remove(this.outgoing); disposeObject3D(this.outgoing); this.outgoing = null; }
+    if (this.model) { this.scene.remove(this.model); disposeObject3D(this.model); this.model = null; }
 
     const glbPromises = urls.map(url => new Promise<THREE.Group>((resolve, reject) =>
       this.loader.load(url, gltf => resolve(gltf.scene), undefined, reject),
@@ -332,7 +359,10 @@ export class VehicleLayer {
       this.trainAnimStart = performance.now();
       this._applyTintToScene();
       this.map?.triggerRepaint();
-    }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
+    }).catch(err => {
+      console.warn('VehicleLayer: failed to compose parts', err);
+      this.onLoadError?.(urls[0]);
+    });
   }
 
   loadFBX(fbxUrl: string, animUrl: string | null, skinUrl: string | null, scaleFactor = 1, idleUrl: string | null = null) {
@@ -350,7 +380,7 @@ export class VehicleLayer {
     if (this.currentTintedTex) { this.currentTintedTex.dispose(); this.currentTintedTex = null; }
 
     if (this.model) {
-      if (this.outgoing) this.scene.remove(this.outgoing);
+      if (this.outgoing) { this.scene.remove(this.outgoing); disposeObject3D(this.outgoing); }
       this.outgoing = this.model;
       this.outgoingAnimStart = performance.now();
       this.model = null;
@@ -443,7 +473,10 @@ export class VehicleLayer {
       this.modelAnimStart = performance.now();
       this.scene.add(wrapper);
       this.map?.triggerRepaint();
-    }).catch(err => console.warn('VehicleLayer: failed to load FBX', fbxUrl, err));
+    }).catch(err => {
+      console.warn('VehicleLayer: failed to load FBX', fbxUrl, err);
+      this.onLoadError?.(fbxUrl);
+    });
   }
 
   /** Reset disappear-animation state so a replay starts with the model fully visible. */
@@ -453,7 +486,7 @@ export class VehicleLayer {
   }
 
   private _clearTrainParts() {
-    this.trainParts.forEach(p => this.scene.remove(p.group));
+    this.trainParts.forEach(p => { this.scene.remove(p.group); disposeObject3D(p.group); });
     this.trainParts = [];
     this.leanAngles = [];
     this.prevPartBearings = [];
@@ -488,29 +521,31 @@ export class VehicleLayer {
         if (t >= 1) this.trainAnimStart = 0;
       }
 
-      this.trainParts.forEach(({ group, zOffset }, i) => {
+      this.trainParts.forEach(({ zOffset }, i) => {
+        const sampler = this.sampler;
+        const totalKm = sampler?.totalKm ?? 0;
         const offsetKm = zOffset * desiredMeters / 1000;
-        const rawProg = this.route.length >= 2 && this.totalKm > 0
-          ? this.progress - offsetKm / this.totalKm
+        const rawProg = sampler && totalKm > 0
+          ? this.progress - offsetKm / totalKm
           : this.progress;
 
         let pos: [number, number];
         let bear: number;
-        if (this.route.length >= 2) {
+        if (sampler && sampler.route.length >= 2) {
           if (rawProg >= 1) {
             // Wagon has reached the destination — trigger its own disappear
             if (!this.partDisappearStarts[i]) this.partDisappearStarts[i] = now;
-            ({ position: pos } = interpolateAlong(this.route, 0.9999));
+            ({ position: pos } = sampler.at(0.9999));
             bear = this.prevPartBearings[i]; // freeze bearing — prevents snap-rotation on arrival
-          } else if (rawProg < 0 && this.totalKm > 0) {
+          } else if (rawProg < 0 && totalKm > 0) {
             // Wagon is behind the route start — extrapolate backwards
-            const { position: startPos, bearing: startBear } = interpolateAlong(this.route, 0);
-            const behindKm = -rawProg * this.totalKm;
-            const pt = turf.destination(turf.point(startPos), behindKm, startBear + 180, { units: 'kilometers' });
+            const { position: startPos, bearing: startBear } = sampler.at(0);
+            const behindKm = -rawProg * totalKm;
+            const pt = destination(point(startPos), behindKm, startBear + 180, { units: 'kilometers' });
             pos = pt.geometry.coordinates as [number, number];
             bear = startBear;
           } else {
-            ({ position: pos, bearing: bear } = interpolateAlong(this.route, rawProg));
+            ({ position: pos, bearing: bear } = sampler.at(rawProg));
           }
         } else {
           pos = this.position;
@@ -563,7 +598,11 @@ export class VehicleLayer {
       if (this.outgoing) {
         const t = Math.min((now - this.outgoingAnimStart) / 180, 1);
         this.outgoing.scale.setScalar(1 - t);
-        if (t >= 1) { this.scene.remove(this.outgoing); this.outgoing = null; }
+        if (t >= 1) {
+          this.scene.remove(this.outgoing);
+          disposeObject3D(this.outgoing);
+          this.outgoing = null;
+        }
       }
       if (this.model && this.modelAnimStart > 0) {
         const t = Math.min((now - this.modelAnimStart) / 280, 1);
@@ -632,8 +671,8 @@ export class VehicleLayer {
   }
 
   onRemove() {
-    if (this.model) this.scene.remove(this.model);
-    if (this.outgoing) this.scene.remove(this.outgoing);
+    if (this.model) { this.scene.remove(this.model); disposeObject3D(this.model); this.model = null; }
+    if (this.outgoing) { this.scene.remove(this.outgoing); disposeObject3D(this.outgoing); this.outgoing = null; }
     this._clearTrainParts();
     this.currentTintedTex?.dispose();
     if (this.fbxMixer) { this.fbxMixer.stopAllAction(); this.fbxMixer = null; }
