@@ -1,4 +1,5 @@
-import * as turf from '@turf/turf';
+import { lineString } from '@turf/helpers';
+import { simplify } from '@turf/simplify';
 import { Waypoint, Segment } from '../types';
 
 export interface GpxImportResult {
@@ -23,16 +24,16 @@ function extractPoints(xml: Document): [number, number][] {
 
 function adaptiveSimplify(pts: [number, number][], target = 15): [number, number][] {
   if (pts.length <= target) return pts;
-  const line = turf.lineString(pts);
+  const line = lineString(pts);
   let lo = 0, hi = 10;
   for (let iter = 0; iter < 24; iter++) {
     const mid = (lo + hi) / 2;
-    const s = turf.simplify(line, { tolerance: mid, highQuality: false });
+    const s = simplify(line, { tolerance: mid, highQuality: false });
     if (s.geometry.coordinates.length > target) lo = mid;
     else hi = mid;
     if (hi - lo < 1e-6) break;
   }
-  const result = turf.simplify(line, { tolerance: hi, highQuality: true });
+  const result = simplify(line, { tolerance: hi, highQuality: true });
   return result.geometry.coordinates as [number, number][];
 }
 
@@ -62,11 +63,18 @@ export function parseGpx(text: string): GpxImportResult | null {
   const keyPts = adaptiveSimplify(allPts, 15);
   if (keyPts.length < 2) return null;
 
-  const lngs = allPts.map(p => p[0]);
-  const lats = allPts.map(p => p[1]);
+  // Plain loop, not Math.min(...spread): real-world GPX tracks can exceed the
+  // engine's argument-count limit (~65k) and throw RangeError on spread.
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of allPts) {
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
   const bounds: [[number, number], [number, number]] = [
-    [Math.min(...lngs), Math.min(...lats)],
-    [Math.max(...lngs), Math.max(...lats)],
+    [minLng, minLat],
+    [maxLng, maxLat],
   ];
 
   const ts = Date.now();
@@ -100,7 +108,9 @@ export function parseGpx(text: string): GpxImportResult | null {
       route,
     });
 
-    searchFrom = fromIdx;
+    // Continue the next search from this segment's end — starting from fromIdx
+    // could snap a later waypoint to an earlier pass on self-crossing tracks
+    searchFrom = toIdx;
   }
 
   return { waypoints, segments, bounds };

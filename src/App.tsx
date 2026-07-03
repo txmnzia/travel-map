@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import { MapEditor, MapEditorHandle } from './components/MapEditor';
-import { AnimationPlayer } from './components/AnimationPlayer';
-import { VehicleSelector } from './components/VehicleSelector';
 import { MapStylePicker } from './components/MapStylePicker';
+
+// Lazy-load the two components that pull in Three.js (~⅓ of the bundle) —
+// neither is needed until the user opens the selector or presses Play
+const AnimationPlayer = lazy(() =>
+  import('./components/AnimationPlayer').then(m => ({ default: m.AnimationPlayer })));
+const VehicleSelector = lazy(() =>
+  import('./components/VehicleSelector').then(m => ({ default: m.VehicleSelector })));
 import { Toolbar } from './components/Toolbar';
 import { useWaypoints } from './hooks/useWaypoints';
 import { parseGpx } from './utils/gpx';
@@ -20,14 +25,13 @@ export default function App() {
     segmentId: string;
     vehicle: VehicleType;
     color: string | null;
-    animation: string | null;
   } | null>(null);
 
   // Listen for open-vehicle-selector events from marker elements
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null; animation?: string | null };
-      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null, animation: detail.animation ?? null });
+      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null };
+      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null });
     };
     document.addEventListener('open-vehicle-selector', handler);
     return () => document.removeEventListener('open-vehicle-selector', handler);
@@ -54,13 +58,17 @@ export default function App() {
 
   const handleGpxImport = useCallback(
     (file: File) => {
+      const showError = (msg: string) => {
+        setGpxError(msg);
+        setTimeout(() => setGpxError(null), 4000);
+      };
       const reader = new FileReader();
+      reader.onerror = () => showError('Could not read the file. Please try again.');
       reader.onload = (e) => {
         const text = e.target?.result as string;
         const result = parseGpx(text);
         if (!result) {
-          setGpxError('Could not read GPX file. Make sure it contains track or route points.');
-          setTimeout(() => setGpxError(null), 4000);
+          showError('Could not read GPX file. Make sure it contains track or route points.');
           return;
         }
         dispatch({ type: 'IMPORT_ROUTE', waypoints: result.waypoints, segments: result.segments });
@@ -104,8 +112,10 @@ export default function App() {
           {/* Bottom toolbar */}
           <Toolbar
             canUndo={canUndo}
+            canRedo={canRedo}
             waypointCount={state.waypoints.length}
             onUndo={() => dispatch({ type: 'UNDO' })}
+            onRedo={() => dispatch({ type: 'REDO' })}
             onPlay={enterPreview}
             onClear={() => dispatch({ type: 'CLEAR_ALL' })}
             onStylePicker={() => setShowStylePicker(true)}
@@ -123,17 +133,18 @@ export default function App() {
 
           {/* Vehicle selector bottom sheet */}
           {vehicleSelector && (
-            <VehicleSelector
-              segmentId={vehicleSelector.segmentId}
-              current={vehicleSelector.vehicle}
-              currentColor={vehicleSelector.color}
-              onSelect={(segmentId, vehicle, color, animation) => {
-                dispatch({ type: 'SET_VEHICLE', segmentId, vehicle });
-                dispatch({ type: 'SET_COLOR', segmentId, color });
-                dispatch({ type: 'SET_ANIMATION', segmentId, animation: animation ?? null });
-              }}
-              onClose={() => setVehicleSelector(null)}
-            />
+            <Suspense fallback={null}>
+              <VehicleSelector
+                segmentId={vehicleSelector.segmentId}
+                current={vehicleSelector.vehicle}
+                currentColor={vehicleSelector.color}
+                onSelect={(segmentId, vehicle, color) => {
+                  // Single atomic action → one undo entry per selector interaction
+                  dispatch({ type: 'SET_VEHICLE', segmentId, vehicle, color });
+                }}
+                onClose={() => setVehicleSelector(null)}
+              />
+            </Suspense>
           )}
 
           {/* Map style picker */}
@@ -151,11 +162,13 @@ export default function App() {
 
       {/* Preview mode overlays */}
       {mode === 'preview' && (
-        <AnimationPlayer
-          map={map}
-          state={state}
-          onBack={exitPreview}
-        />
+        <Suspense fallback={null}>
+          <AnimationPlayer
+            map={map}
+            state={state}
+            onBack={exitPreview}
+          />
+        </Suspense>
       )}
     </div>
   );

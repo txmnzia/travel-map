@@ -1,10 +1,45 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import * as turf from '@turf/turf';
+import { lineString } from '@turf/helpers';
+import { length } from '@turf/length';
 import { TravelState } from '../types';
-import { getVehicle, vehicleModelUrl, resolveAnimUrl, VehicleConfig } from '../utils/vehicles';
-import { interpolateAlong, sliceRoute } from '../utils/routing';
+import { getVehicle, vehicleModelUrl, VehicleConfig } from '../utils/vehicles';
+import { RouteSampler } from '../utils/routing';
 import { VehicleLayer } from './VehicleLayer';
+
+/** Draw the red km pill onto the recording canvas (mirrors the DOM badge). */
+function drawKmBadge(ctx: CanvasRenderingContext2D, canvasWidth: number, dpr: number, text: string) {
+  const fontSize = 20 * dpr;
+  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+  const textW = ctx.measureText(text).width;
+  const padX = 24 * dpr;
+  const h = 44 * dpr;
+  const w = textW + padX * 2;
+  const x = (canvasWidth - w) / 2;
+  const y = 24 * dpr;
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, h / 2);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvasWidth / 2, y + h / 2);
+}
+
+/** Stamp the arrival flag onto the recording canvas at the destination's screen position. */
+function drawArrivalFlag(ctx: CanvasRenderingContext2D, map: maplibregl.Map, dest: [number, number], dpr: number) {
+  const pt = map.project({ lng: dest[0], lat: dest[1] });
+  ctx.font = `${38 * dpr}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  // Slight left offset so the flagpole sits on the destination point
+  ctx.fillText('🚩', pt.x * dpr - 4 * dpr, pt.y * dpr);
+}
 
 interface Props {
   map: maplibregl.Map | null;
@@ -12,10 +47,10 @@ interface Props {
   onBack: () => void;
 }
 
-function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null, animation: string | null = null) {
+function applyVehicle(layer: VehicleLayer, cfg: VehicleConfig, type: string, color: string | null = null) {
   layer.bobEnabled = cfg.category === 'Boats';
   if (cfg.fbxUrl) {
-    layer.loadFBX(cfg.fbxUrl, resolveAnimUrl(cfg), cfg.skinUrl ?? null, cfg.scaleFactor, cfg.idleUrl ?? null);
+    layer.loadFBX(cfg.fbxUrl, cfg.animUrl ?? null, cfg.skinUrl ?? null, cfg.scaleFactor, cfg.idleUrl ?? null);
   } else if (cfg.partUrls) {
     layer.loadParts(cfg.partUrls, cfg.scaleFactor, cfg.colormapUrl);
   } else {
@@ -44,7 +79,7 @@ function computeSegmentBreakpoints(state: TravelState): number[] {
   if (state.segments.length === 0) return [];
   const lengths = state.segments.map(seg =>
     seg.route.length >= 2
-      ? turf.length(turf.lineString(seg.route), { units: 'kilometers' })
+      ? length(lineString(seg.route), { units: 'kilometers' })
       : 0,
   );
   const total = lengths.reduce((a, b) => a + b, 0);
@@ -72,13 +107,19 @@ function routeZoom(totalKm: number): number {
 
 export function AnimationPlayer({ map, state, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(10);
   const [userScale, setUserScale] = useState(1);
   const [cameraMode, setCameraMode] = useState<'static' | 'pov'>('static');
   const [showCounter, setShowCounter] = useState(true);
-  const [kmTraveled, setKmTraveled] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const vehicleLayerRef = useRef<VehicleLayer | null>(null);
+  const samplerRef = useRef<RouteSampler | null>(null);
+  const kmBadgeRef = useRef<HTMLDivElement | null>(null);  // km text set imperatively — 60 fps setState re-rendered the whole panel
+  const showCounterRef = useRef(true);
+  const flagShownRef = useRef(false);                      // arrival flag visible → compositor stamps it into the video
+  const stopCompositorRef = useRef<(() => void) | null>(null);
   const hiddenMarkersRef = useRef<HTMLElement[]>([]);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -103,10 +144,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   useEffect(() => {
     if (!map || fullRoute.length < 2) return;
 
-    // Precompute lengths once
-    const totalKm = turf.length(turf.lineString(fullRoute), { units: 'kilometers' });
-    totalKmRef.current = totalKm;
-    animZoomRef.current = routeZoom(totalKm);
+    // Precompute cumulative route distances once — the animation loop and each
+    // train wagon query position/bearing every frame
+    const sampler = new RouteSampler(fullRoute);
+    samplerRef.current = sampler;
+    totalKmRef.current = sampler.totalKm;
+    animZoomRef.current = routeZoom(sampler.totalKm);
     segmentBreakpointsRef.current = computeSegmentBreakpoints(state);
 
     // Hide pre-drawn route so only the growing trail is visible
@@ -131,9 +174,16 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     map.addLayer(layer as any);
     vehicleLayerRef.current = layer;
 
-    // Give the layer the full route so train wagons can look up their individual positions
-    layer.route = fullRoute;
-    layer.totalKm = totalKmRef.current;
+    // Surface model-load failures instead of animating an invisible vehicle silently
+    let errToastTimer: ReturnType<typeof setTimeout> | null = null;
+    layer.onLoadError = () => {
+      setLoadError('Could not load the vehicle model. Check your connection and try again.');
+      if (errToastTimer) clearTimeout(errToastTimer);
+      errToastTimer = setTimeout(() => setLoadError(null), 5000);
+    };
+
+    // Give the layer the route sampler so train wagons can look up their individual positions
+    layer.sampler = sampler;
     layer.progress = 0;
 
     // Load first segment's vehicle model
@@ -141,13 +191,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     if (firstSeg) {
       const cfg = getVehicle(firstSeg.vehicle);
       layer.position = fullRoute[0];
-      applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null, firstSeg.animation ?? null);
+      applyVehicle(layer, cfg, firstSeg.vehicle, firstSeg.color ?? null);
       lastVehicleTypeRef.current = firstSeg.vehicle;
       lastColorRef.current = firstSeg.color ?? null;
     }
 
     // Set perspective camera at route start
-    const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, 0);
+    const { position: startPos, bearing: startBearing } = sampler.at(0);
     smoothBearingRef.current = startBearing;
     layer.bearing = startBearing;
     map.easeTo({
@@ -183,7 +233,20 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         properties: {},
       });
 
+      if (errToastTimer) clearTimeout(errToastTimer);
       cancelAnimationFrame(animFrameRef.current);
+
+      // Tear down any in-flight recording — otherwise the canvas capture
+      // pipeline, compositor loop, and encoder keep running after leaving preview
+      recordingCompletedRef.current = false;
+      stopCompositorRef.current?.();
+      const rec = mediaRecorderRef.current;
+      if (rec) {
+        if (rec.state === 'recording') rec.stop();
+        rec.stream.getTracks().forEach(t => t.stop());
+        mediaRecorderRef.current = null;
+      }
+
       map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,11 +304,15 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     const displayProg = Math.min(prog, 1);
 
     progressRef.current = displayProg;
-    setProgress(displayProg);
-    setKmTraveled(Math.round(displayProg * totalKmRef.current));
+    if (kmBadgeRef.current) {
+      kmBadgeRef.current.textContent =
+        `${Math.round(displayProg * totalKmRef.current).toLocaleString()} km`;
+    }
 
-    const { position, bearing } = interpolateAlong(fullRoute, displayProg);
-    const trail = sliceRoute(fullRoute, displayProg);
+    const sampler = samplerRef.current ?? new RouteSampler(fullRoute);
+    samplerRef.current = sampler;
+    const { position, bearing } = sampler.at(displayProg);
+    const trail = sampler.slice(displayProg);
 
     // Smooth the vehicle model's bearing (the 3D model turns, not the map)
     let delta = bearing - smoothBearingRef.current;
@@ -264,7 +331,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       const seg = vehicleAtProgress(state, displayProg, segmentBreakpointsRef.current);
       if (seg && seg.vehicle !== lastVehicleTypeRef.current) {
         const cfg = getVehicle(seg.vehicle);
-        applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
+        applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null);
         lastVehicleTypeRef.current = seg.vehicle;
         lastColorRef.current = seg.color ?? null;
       } else if (seg && (seg.color ?? null) !== lastColorRef.current) {
@@ -293,7 +360,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       easing: (t) => t,
     });
 
-    const done = layer?.isFullyDone() ?? false;
+    // Done when every part has shrunk out — or, if no visual ever loaded (model
+    // 404/parse failure), once progress passes the end plus a small grace period.
+    // Without the fallback a failed load would leave this rAF loop (and the
+    // recorder) running forever.
+    const done = layer
+      ? (layer.isFullyDone() || (prog >= 1.05 && !layer.hasVisual()))
+      : prog >= 1.05;
     if (!done) {
       animFrameRef.current = requestAnimationFrame(animate);
     } else {
@@ -318,13 +391,13 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       arrivalFlagRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat(dest)
         .addTo(map);
+      flagShownRef.current = true; // compositor stamps the flag into the final video frames
 
       if (mediaRecorderRef.current?.state === 'recording') {
         recordingCompletedRef.current = true;
         setTimeout(() => mediaRecorderRef.current?.stop(), 200);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, fullRoute, duration, state]);
 
   const play = useCallback(() => {
@@ -343,9 +416,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
     resumeFromRef.current = 0;
 
     if (!isResume) {
-      setProgress(0);
       progressRef.current = 0;
-      setKmTraveled(0);
+      if (kmBadgeRef.current) kmBadgeRef.current.textContent = '0 km';
+      flagShownRef.current = false;
       if (arrivalFlagRef.current) { arrivalFlagRef.current.remove(); arrivalFlagRef.current = null; }
     }
 
@@ -360,7 +433,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
       }
 
       const startProg = isResume ? resumeFrom : 0;
-      const { position: startPos, bearing: startBearing } = interpolateAlong(fullRoute, startProg);
+      const sampler = samplerRef.current ?? new RouteSampler(fullRoute);
+      samplerRef.current = sampler;
+      const { position: startPos, bearing: startBearing } = sampler.at(startProg);
       smoothBearingRef.current = startBearing;
 
       if (!isResume) {
@@ -383,7 +458,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         if (!isResume) {
           layer.resetForReplay();
           const cfg = getVehicle(seg.vehicle);
-          applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null, seg.animation ?? null);
+          applyVehicle(layer, cfg, seg.vehicle, seg.color ?? null);
         } else {
           layer.resumeAnimation();
         }
@@ -391,14 +466,47 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         lastColorRef.current = seg.color ?? null;
       }
 
-      // Start background recording silently — video is ready when animation completes
-      const canvas = map.getCanvas();
-      if (canvas.captureStream && typeof MediaRecorder !== 'undefined') {
+      // Start background recording silently — video is ready when animation completes.
+      // Recording goes through an offscreen 2D canvas that composites the WebGL map
+      // with the km counter and arrival flag: those are DOM overlays on screen, so
+      // capturing the map canvas alone would silently drop them from the video.
+      const mapCanvas = map.getCanvas();
+      if (typeof mapCanvas.captureStream === 'function' && typeof MediaRecorder !== 'undefined') {
         try {
           const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
           const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm';
           const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-          const stream = canvas.captureStream(30);
+
+          const comp = document.createElement('canvas');
+          comp.width = mapCanvas.width;
+          comp.height = mapCanvas.height;
+          const ctx = comp.getContext('2d')!;
+
+          let compFrame = 0;
+          const compose = () => {
+            if (comp.width !== mapCanvas.width || comp.height !== mapCanvas.height) {
+              comp.width = mapCanvas.width;
+              comp.height = mapCanvas.height;
+            }
+            const dpr = mapCanvas.clientWidth > 0 ? mapCanvas.width / mapCanvas.clientWidth : 1;
+            ctx.drawImage(mapCanvas, 0, 0);
+            if (showCounterRef.current) {
+              const km = Math.round(Math.min(progressRef.current, 1) * totalKmRef.current);
+              drawKmBadge(ctx, comp.width, dpr, `${km.toLocaleString()} km`);
+            }
+            if (flagShownRef.current) {
+              drawArrivalFlag(ctx, map, fullRoute[fullRoute.length - 1], dpr);
+            }
+            compFrame = requestAnimationFrame(compose);
+          };
+          compose();
+          stopCompositorRef.current?.(); // stop a leftover compositor from a previous run
+          stopCompositorRef.current = () => {
+            cancelAnimationFrame(compFrame);
+            stopCompositorRef.current = null;
+          };
+
+          const stream = comp.captureStream(30);
           chunksRef.current = [];
           const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
           recorder.ondataavailable = (e) => {
@@ -413,6 +521,9 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               }
             }
             chunksRef.current = [];
+            // Release the capture pipeline (each play() creates a fresh compositor+stream)
+            stopCompositorRef.current?.();
+            stream.getTracks().forEach(t => t.stop());
           };
           mediaRecorderRef.current = recorder;
           recorder.start();
@@ -434,6 +545,7 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
   useEffect(() => { playRef.current = play; }, [play]);
 
   useEffect(() => { cameraModeRef.current = cameraMode; }, [cameraMode]);
+  useEffect(() => { showCounterRef.current = showCounter; }, [showCounter]);
 
   // Sync user-controlled scale to the live layer immediately (no model reload needed)
   useEffect(() => {
@@ -465,13 +577,22 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
         </button>
 
         {isPlaying && showCounter && (
-          <div className="bg-red-500 text-white font-bold text-xl px-6 py-2 rounded-full shadow-lg">
-            {kmTraveled.toLocaleString()} km
+          <div ref={kmBadgeRef} className="bg-red-500 text-white font-bold text-xl px-6 py-2 rounded-full shadow-lg">
+            0 km
           </div>
         )}
 
         <div className="w-11" />
       </div>
+
+      {/* Model-load error toast */}
+      {loadError && (
+        <div className="flex justify-center px-4 mt-2 pointer-events-none">
+          <div className="bg-red-600 text-white text-sm px-4 py-2 rounded-xl shadow-lg max-w-xs text-center">
+            {loadError}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1" />
 
@@ -489,7 +610,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               max={30}
               step={1}
               value={duration}
-              onChange={e => setDuration(Number(e.target.value))}
+              onChange={e => {
+                setDuration(Number(e.target.value));
+                // Changing the length restarts from the beginning — resuming with a
+                // different duration would visibly jump the playback speed mid-route
+                resumeFromRef.current = 0;
+              }}
               className="w-full h-2 accent-amber"
               disabled={isPlaying}
             />
@@ -554,11 +680,12 @@ export function AnimationPlayer({ map, state, onBack }: Props) {
               'flex-1 py-3 rounded-2xl font-bold text-base transition-all active:scale-95',
               videoReady
                 ? 'bg-white/30 text-white'
-                : 'bg-white/20 cursor-not-allowed',
-              isPlaying ? 'text-white/60' : 'text-white/40',
+                : isPlaying
+                  ? 'bg-white/20 text-white/60 cursor-not-allowed'
+                  : 'bg-white/20 text-white/40 cursor-not-allowed',
             ].join(' ')}
           >
-            {isPlaying && !videoReady ? 'Preparing…' : videoReady ? '⬇ Download' : '⬇ Download'}
+            {!videoReady && isPlaying ? 'Preparing…' : '⬇ Download'}
           </button>
         </div>
 

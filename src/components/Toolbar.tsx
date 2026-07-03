@@ -2,8 +2,10 @@ import { useRef } from 'react';
 
 interface Props {
   canUndo: boolean;
+  canRedo: boolean;
   waypointCount: number;
   onUndo: () => void;
+  onRedo: () => void;
   onPlay: () => void;
   onClear: () => void;
   onStylePicker: () => void;
@@ -12,8 +14,10 @@ interface Props {
 
 export function Toolbar({
   canUndo,
+  canRedo,
   waypointCount,
   onUndo,
+  onRedo,
   onPlay,
   onClear,
   onStylePicker,
@@ -52,8 +56,8 @@ export function Toolbar({
           </button>
         </div>
 
-        {/* 🗺️ · 📂 · [gap] · ↩ · 🗑 — symmetric 2+2 around the centered play button */}
-        <div className="flex items-center justify-center gap-4 py-3 px-6">
+        {/* 🗺️ · 📂 · [gap] · ↩ ↪ · 🗑 — grouped around the centered play button */}
+        <div className="flex items-center justify-center gap-3 py-3 px-4">
           <button onClick={onStylePicker} className={btnBase} aria-label="Map style">🗺️</button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -67,6 +71,7 @@ export function Toolbar({
           <div className="w-16 shrink-0" aria-hidden="true" />
 
           <button onClick={onUndo} disabled={!canUndo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Undo">↩</button>
+          <button onClick={onRedo} disabled={!canRedo} className={`${btnBase} text-white disabled:opacity-30`} aria-label="Redo">↪</button>
           <button onClick={onClear} disabled={waypointCount === 0} className={`${btnBase} disabled:opacity-30`} aria-label="Clear all">🗑</button>
           <input
             ref={fileInputRef}

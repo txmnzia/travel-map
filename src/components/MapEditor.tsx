@@ -1,15 +1,15 @@
 import {
   useEffect,
   useRef,
-  useCallback,
   forwardRef,
   useImperativeHandle,
 } from 'react';
 import maplibregl from 'maplibre-gl';
-import * as turf from '@turf/turf';
+import { featureCollection, lineString, point } from '@turf/helpers';
+import { nearestPointOnLine } from '@turf/nearest-point-on-line';
 import { TravelState, TravelAction, Segment, Waypoint } from '../types';
 import { getVehicle } from '../utils/vehicles';
-import { computeRoute } from '../utils/routing';
+import { computeRoute, routeMidpoint } from '../utils/routing';
 import { getStyleUrl, MAP_STYLES } from '../utils/mapStyles';
 import type { MapStyleId } from '../types';
 
@@ -43,7 +43,6 @@ function createWaypointEl(
   segments: Segment[],
   waypointId: string,
   isLast: boolean,
-  isFirst: boolean,
 ): HTMLElement {
   const el = document.createElement('div');
   el.style.cssText = 'cursor: grab; user-select: none; touch-action: manipulation;';
@@ -114,7 +113,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     const segmentsRef = useRef(state.segments);
     const waypointsRef = useRef(state.waypoints);
     const dispatchRef = useRef(dispatch);
-    const routeLineClickedRef = useRef(false);
     // Key of the handle marker currently being dragged — used to skip setLngLat during drag
     const draggingHandleRef = useRef<string | null>(null);
 
@@ -149,7 +147,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         center: [10, 25],
         zoom: 2,
         preserveDrawingBuffer: true,
-        attributionControl: false,
+        // OSM/OpenFreeMap and Carto tiles require attribution — keep it visible
+        attributionControl: { compact: true },
       });
 
       mapRef.current = map;
@@ -206,8 +205,8 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           if (!seg || seg.route.length < 2) return;
 
           // Snap click to nearest point on the route geometry
-          const clickPt = turf.point([e.lngLat.lng, e.lngLat.lat]);
-          const nearest = turf.nearestPointOnLine(turf.lineString(seg.route), clickPt);
+          const clickPt = point([e.lngLat.lng, e.lngLat.lat]);
+          const nearest = nearestPointOnLine(lineString(seg.route), clickPt);
           const [lng, lat] = nearest.geometry.coordinates;
 
           const waypoint = {
@@ -228,26 +227,31 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
         mapReadyRef.current = true;
         loadSucceeded = true;
+        if (watchdog) { clearTimeout(watchdog); watchdog = null; }
         requestAnimationFrame(() => { applySize(); map.resize(); });
       });
 
-      // Auto-retry on style load failure: same style up to 3×, then cycle through other styles
+      // Style-load watchdog: if the style hasn't reached 'load' after 10 s, retry
+      // the same style up to 3×, then rotate through the other styles. Individual
+      // tile/glyph 'error' events are deliberately NOT used as a trigger — they
+      // also fire for transient tile failures on styles that are loading fine,
+      // and restarting the style load on those made startup slow and could switch
+      // the user's map style for no reason.
       let loadSucceeded = false;
       let retries = 0;
       const styleIds = MAP_STYLES.map(s => s.id);
       let styleIdx = styleIds.indexOf(mapStyle);
-      map.on('error', () => {
-        if (loadSucceeded) return;
-        retries++;
-        if (retries <= 3) {
-          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(mapStyle)), retries * 1500);
-        } else {
-          // Rotate to the next available style
-          styleIdx = (styleIdx + 1) % styleIds.length;
-          const fallbackStyle = styleIds[styleIdx];
-          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(fallbackStyle)), 2000);
-        }
-      });
+      let watchdog: ReturnType<typeof setTimeout> | null = null;
+      const armWatchdog = () => {
+        watchdog = setTimeout(() => {
+          if (loadSucceeded || !mapRef.current) return;
+          retries++;
+          if (retries > 3) styleIdx = (styleIdx + 1) % styleIds.length;
+          mapRef.current.setStyle(getStyleUrl(styleIds[styleIdx]));
+          armWatchdog();
+        }, 10_000);
+      };
+      armWatchdog();
 
       // Click on empty map → add new destination waypoint.
       // Use queryRenderedFeatures to guard against clicks on route segments —
@@ -271,6 +275,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       if (containerRef.current) ro.observe(containerRef.current);
 
       return () => {
+        if (watchdog) clearTimeout(watchdog);
         window.removeEventListener('resize', onResize);
         window.visualViewport?.removeEventListener('resize', onResize);
         ro.disconnect();
@@ -281,10 +286,17 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Style requested most recently — the constructor already loads the initial
+    // one, so the effect below must not re-set it on mount (that forced a full
+    // "rebuilding the style from scratch" reload before the first load finished)
+    const appliedStyleRef = useRef(mapStyle);
+
     // Update map style
     useEffect(() => {
       const map = mapRef.current;
       if (!map) return;
+      if (appliedStyleRef.current === mapStyle) return;
+      appliedStyleRef.current = mapStyle;
       map.setStyle(getStyleUrl(mapStyle));
       map.once('styledata', () => {
         mapReadyRef.current = true;
@@ -293,11 +305,11 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           const segments = segmentsRef.current;
           const features = segments
             .filter(s => s.route.length >= 2)
-            .map(s => turf.lineString(s.route, { segmentId: s.id }));
+            .map(s => lineString(s.route, { segmentId: s.id }));
 
           map.addSource('routes', {
             type: 'geojson',
-            data: turf.featureCollection(features),
+            data: featureCollection(features),
           });
           map.addLayer({
             id: 'routes-line',
@@ -373,16 +385,16 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
               to = [ll.lng, ll.lat];
             } else {
               if (s.route.length < 2) return null;
-              return turf.lineString(s.route, { segmentId: s.id });
+              return lineString(s.route, { segmentId: s.id });
             }
 
             const route = computeRoute(from, to, s.vehicle, s.handles);
-            return turf.lineString(route, { segmentId: s.id });
+            return lineString(route, { segmentId: s.id });
           })
           .filter((f): f is NonNullable<typeof f> => f !== null);
 
         const src = mapRef.current?.getSource('routes') as maplibregl.GeoJSONSource | undefined;
-        src?.setData(turf.featureCollection(features) as GeoJSON.FeatureCollection);
+        src?.setData(featureCollection(features) as GeoJSON.FeatureCollection);
 
         // Move handle markers in real-time for segments connected to the dragged waypoint
         segs.forEach(s => {
@@ -401,47 +413,60 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         });
       };
 
-      // Add or update markers
+      // Add or update markers. A marker only needs rebuilding when its appearance
+      // or its long-press payload changes — recreating every marker on every state
+      // change tore down DOM/listeners mid-interaction and needed a visibility
+      // hack to hide the resulting flash. The signature captures everything the
+      // element and its handlers close over.
       waypoints.forEach((wp, idx) => {
         const isLast = idx === waypoints.length - 1;
-        const isFirst = idx === 0;
+        const isFlag = isLast && waypoints.length > 1;
+        const outgoingSeg = segments.find(s => s.fromId === wp.id);
+        const incomingSeg = segments.find(s => s.toId === wp.id);
+        const vehicleChanged = !incomingSeg || !outgoingSeg || incomingSeg.vehicle !== outgoingSeg.vehicle;
+        const emoji = !outgoingSeg ? '📍' : vehicleChanged ? getVehicle(outgoingSeg.vehicle).emoji : '';
+        const sig = [
+          isFlag ? 'flag' : 'dot',
+          isFlag ? '' : emoji,
+          outgoingSeg?.id ?? '',
+          outgoingSeg?.vehicle ?? '',
+          outgoingSeg?.color ?? '',
+        ].join('|');
 
-        if (existing.has(wp.id)) {
-          // Refresh element (vehicle icon may have changed) by recreating marker.
-          // Hide briefly to prevent a 1-frame flash at the map origin (0,0).
-          existing.get(wp.id)!.remove();
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
-          el.style.visibility = 'hidden';
-          setupWaypointEl(el, wp.id, segments, isLast);
-          const newMarker = new maplibregl.Marker({ element: el, draggable: true, anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center' })
-            .setLngLat([wp.lng, wp.lat])
-            .addTo(map);
-          requestAnimationFrame(() => { el.style.visibility = ''; });
-          newMarker.on('drag', makeLiveDragHandler(newMarker, wp.id));
-          newMarker.on('dragend', () => {
-            const ll = newMarker.getLngLat();
-            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
-          });
-          existing.set(wp.id, newMarker);
-        } else {
-          const el = createWaypointEl(waypoints, segments, wp.id, isLast, isFirst);
-          setupWaypointEl(el, wp.id, segments, isLast);
-          const marker = new maplibregl.Marker({
-            element: el,
-            draggable: true,
-            anchor: isLast && waypoints.length > 1 ? 'bottom' : 'center',
-          })
-            .setLngLat([wp.lng, wp.lat])
-            .addTo(map);
-
-          marker.on('drag', makeLiveDragHandler(marker, wp.id));
-          marker.on('dragend', () => {
-            const ll = marker.getLngLat();
-            dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
-          });
-
-          existing.set(wp.id, marker);
+        const prev = existing.get(wp.id);
+        if (prev && prev.getElement().dataset.sig === sig) {
+          prev.setLngLat([wp.lng, wp.lat]);
+          return;
         }
+
+        const isReplacing = !!prev;
+        prev?.remove();
+
+        const el = createWaypointEl(waypoints, segments, wp.id, isLast);
+        el.dataset.sig = sig;
+        setupWaypointEl(el, wp.id, segments, isLast);
+        if (isReplacing) {
+          // Hide briefly to prevent a 1-frame flash at the map origin (0,0)
+          el.style.visibility = 'hidden';
+        }
+        const marker = new maplibregl.Marker({
+          element: el,
+          draggable: true,
+          anchor: isFlag ? 'bottom' : 'center',
+        })
+          .setLngLat([wp.lng, wp.lat])
+          .addTo(map);
+        if (isReplacing) {
+          requestAnimationFrame(() => { el.style.visibility = ''; });
+        }
+
+        marker.on('drag', makeLiveDragHandler(marker, wp.id));
+        marker.on('dragend', () => {
+          const ll = marker.getLngLat();
+          dispatchRef.current({ type: 'MOVE_WAYPOINT', id: wp.id, lng: ll.lng, lat: ll.lat });
+        });
+
+        existing.set(wp.id, marker);
       });
 
       // Show/hide markers based on mode
@@ -523,7 +548,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           navigator.vibrate?.(40);
           el.dispatchEvent(new CustomEvent('open-vehicle-selector', {
             bubbles: true,
-            detail: { segmentId: seg.id, vehicle: seg.vehicle, color: seg.color ?? null, animation: seg.animation ?? null },
+            detail: { segmentId: seg.id, vehicle: seg.vehicle, color: seg.color ?? null },
           }));
         }, 600);
       };
@@ -583,14 +608,17 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
         const fLng = fromWp?.lng ?? 0, fLat = fromWp?.lat ?? 0;
         const tLng = toWp?.lng ?? 0,  tLat = toWp?.lat ?? 0;
 
-        // Visual position: Bézier midpoint P(0.5) = 0.25A + 0.5H + 0.25B when curved,
-        // geographic midpoint for straight segments.
+        // Visual position: Bézier midpoint P(0.5) = 0.25A + 0.5H + 0.25B when curved;
+        // otherwise the actual route midpoint so the handle sits ON the drawn line
+        // (great-circle boat arcs and imported GPX paths are not straight).
         const handlePos: [number, number] = seg.handles.length > 0
           ? [
               0.25 * fLng + 0.5 * seg.handles[0][0] + 0.25 * tLng,
               0.25 * fLat + 0.5 * seg.handles[0][1] + 0.25 * tLat,
             ]
-          : [(fLng + tLng) / 2, (fLat + tLat) / 2];
+          : seg.route.length > 2
+            ? routeMidpoint(seg.route)
+            : [(fLng + tLng) / 2, (fLat + tLat) / 2];
 
         if (existing.has(handleKey)) {
           if (draggingHandleRef.current !== handleKey) {
@@ -627,14 +655,6 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
           existing.set(handleKey, marker);
         }
       });
-
-      // Remove handles for waypoints that no longer exist
-      existing.forEach((marker, key) => {
-        if (!currentSegIds.has(key.split(':')[0])) {
-          marker.remove();
-          existing.delete(key);
-        }
-      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.segments, visible]);
 
@@ -643,19 +663,23 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       const map = mapRef.current;
       if (!map || !mapReadyRef.current) return;
 
+      // Retry until the source exists (it disappears briefly on style change),
+      // but cancel on unmount/re-run so the poll can't run forever
+      let timer: ReturnType<typeof setTimeout> | null = null;
       const waitForStyle = () => {
         const src = map.getSource('routes') as maplibregl.GeoJSONSource | undefined;
         if (!src) {
-          setTimeout(waitForStyle, 100);
+          timer = setTimeout(waitForStyle, 100);
           return;
         }
         const features = state.segments
           .filter(s => s.route.length >= 2)
-          .map(s => turf.lineString(s.route, { segmentId: s.id }));
+          .map(s => lineString(s.route, { segmentId: s.id }));
 
-        src.setData(turf.featureCollection(features));
+        src.setData(featureCollection(features));
       };
       waitForStyle();
+      return () => { if (timer) clearTimeout(timer); };
     }, [state.segments]);
 
 

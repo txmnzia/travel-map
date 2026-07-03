@@ -21,7 +21,6 @@ export interface Segment {
   vehicle: VehicleType;
   manualVehicle?: boolean;
   color?: string | null;
-  animation?: string | null;
   /** User-placed bezier control handles between the two waypoints */
   handles: [number, number][];
   /** Computed polyline coordinates [lng, lat][] */
@@ -38,13 +37,12 @@ export type TravelAction =
   | { type: 'MOVE_WAYPOINT'; id: string; lng: number; lat: number }
   | { type: 'REMOVE_LAST_WAYPOINT' }
   | { type: 'CLEAR_ALL' }
-  | { type: 'SET_VEHICLE'; segmentId: string; vehicle: VehicleType }
+  /** Atomic vehicle + colour pick — one undo entry per selector interaction */
+  | { type: 'SET_VEHICLE'; segmentId: string; vehicle: VehicleType; color: string | null }
   | { type: 'ADD_HANDLE'; segmentId: string; handle: [number, number] }
   | { type: 'MOVE_HANDLE'; segmentId: string; index: number; handle: [number, number] }
   | { type: 'REMOVE_WAYPOINT'; id: string }
   | { type: 'INSERT_WAYPOINT'; waypoint: Waypoint; segmentId: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
-  | { type: 'SET_COLOR'; segmentId: string; color: string | null }
-  | { type: 'SET_ANIMATION'; segmentId: string; animation: string | null }
   | { type: 'IMPORT_ROUTE'; waypoints: Waypoint[]; segments: Segment[] };
