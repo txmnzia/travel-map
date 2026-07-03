@@ -4,7 +4,7 @@ import { computeRoute } from '../utils/routing';
 
 const MAX_HISTORY = 30;
 
-interface HistoryState {
+export interface HistoryState {
   past: TravelState[];
   present: TravelState;
   future: TravelState[];
@@ -28,7 +28,7 @@ function recomputeSegment(
   return { ...seg, route };
 }
 
-function travelReducer(state: TravelState, action: TravelAction): TravelState {
+export function travelReducer(state: TravelState, action: TravelAction): TravelState {
   switch (action.type) {
     case 'ADD_WAYPOINT': {
       const waypoints = [...state.waypoints, action.waypoint];
@@ -77,11 +77,13 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         const fromWp = state.waypoints.find(w => w.id === incoming.fromId)!;
         const toWp = state.waypoints.find(w => w.id === outgoing.toId)!;
         const newSeg: Segment = {
-          id: `seg-${Date.now()}`,
+          id: `seg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           fromId: fromWp.id,
           toId: toWp.id,
           vehicle: outgoing.vehicle,
-          manualVehicle: false,
+          // Keep the user's explicit choice — resetting it would silently re-enable
+          // forward propagation over a segment they configured by hand
+          manualVehicle: outgoing.manualVehicle,
           color: outgoing.color,
           handles: [],
           route: computeRoute(
@@ -120,12 +122,14 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         ...state.waypoints.slice(fromIdx + 1),
       ];
 
+      // Both halves inherit the split segment's settings (handles are intentionally
+      // dropped — a curve through the old control point no longer makes sense)
       const seg1: Segment = {
         id: `seg-${Date.now()}-a`,
         fromId: fromWp.id,
         toId: waypoint.id,
         vehicle: seg.vehicle,
-        manualVehicle: false,
+        manualVehicle: seg.manualVehicle,
         color: seg.color,
         handles: [],
         route: computeRoute([fromWp.lng, fromWp.lat], [waypoint.lng, waypoint.lat], seg.vehicle, []),
@@ -135,7 +139,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
         fromId: waypoint.id,
         toId: toWp.id,
         vehicle: seg.vehicle,
-        manualVehicle: false,
+        manualVehicle: seg.manualVehicle,
         color: seg.color,
         handles: [],
         route: computeRoute([waypoint.lng, waypoint.lat], [toWp.lng, toWp.lat], seg.vehicle, []),
@@ -158,20 +162,6 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
     case 'IMPORT_ROUTE':
       return { waypoints: action.waypoints, segments: action.segments };
 
-    case 'SET_COLOR': {
-      const segments = state.segments.map(seg =>
-        seg.id === action.segmentId ? { ...seg, color: action.color } : seg,
-      );
-      return { ...state, segments };
-    }
-
-    case 'SET_ANIMATION': {
-      const segments = state.segments.map(seg =>
-        seg.id === action.segmentId ? { ...seg, animation: action.animation } : seg,
-      );
-      return { ...state, segments };
-    }
-
     case 'SET_VEHICLE': {
       const idx = state.segments.findIndex(s => s.id === action.segmentId);
       if (idx === -1) return state;
@@ -180,11 +170,14 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
       const segments = state.segments.map((seg, i) => {
         if (i < idx) return seg;
         if (i === idx) {
-          return recomputeSegment({ ...seg, vehicle: action.vehicle, manualVehicle: true }, state.waypoints);
+          return recomputeSegment(
+            { ...seg, vehicle: action.vehicle, color: action.color, manualVehicle: true },
+            state.waypoints,
+          );
         }
         // Propagate forward until hitting a manually-set segment
         if (blocked || seg.manualVehicle) { blocked = true; return seg; }
-        return recomputeSegment({ ...seg, vehicle: action.vehicle }, state.waypoints);
+        return recomputeSegment({ ...seg, vehicle: action.vehicle, color: action.color }, state.waypoints);
       });
       return { ...state, segments };
     }
@@ -216,7 +209,7 @@ function travelReducer(state: TravelState, action: TravelAction): TravelState {
   }
 }
 
-function historyReducer(state: HistoryState, action: TravelAction): HistoryState {
+export function historyReducer(state: HistoryState, action: TravelAction): HistoryState {
   if (action.type === 'UNDO') {
     if (state.past.length === 0) return state;
     const previous = state.past[state.past.length - 1];
