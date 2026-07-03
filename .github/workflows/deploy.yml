@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/travel-video-generator-fQ86O]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +29,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
 
       - run: npm run build
 
