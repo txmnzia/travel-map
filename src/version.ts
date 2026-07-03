@@ -4,4 +4,4 @@
  * additional user-facing change on the same day. Bump this in every commit
  * that changes user-facing code (see CLAUDE.md).
  */
-export const VERSION = 'v20260703-3';
+export const VERSION = 'v20260703-4';
