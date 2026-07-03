@@ -10,7 +10,7 @@ import { AppMode, MapStyleId, VehicleType } from './types';
 
 export default function App() {
   const mapEditorRef = useRef<MapEditorHandle>(null);
-  const { state, dispatch, addWaypoint, canUndo } = useWaypoints();
+  const { state, dispatch, addWaypoint, canUndo, canRedo } = useWaypoints();
 
   const [mode, setMode] = useState<AppMode>('edit');
   const [mapStyle, setMapStyle] = useState<MapStyleId>('bright');
@@ -20,14 +20,13 @@ export default function App() {
     segmentId: string;
     vehicle: VehicleType;
     color: string | null;
-    animation: string | null;
   } | null>(null);
 
   // Listen for open-vehicle-selector events from marker elements
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null; animation?: string | null };
-      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null, animation: detail.animation ?? null });
+      const detail = (e as CustomEvent).detail as { segmentId: string; vehicle: VehicleType; color?: string | null };
+      setVehicleSelector({ segmentId: detail.segmentId, vehicle: detail.vehicle, color: detail.color ?? null });
     };
     document.addEventListener('open-vehicle-selector', handler);
     return () => document.removeEventListener('open-vehicle-selector', handler);
@@ -104,8 +103,10 @@ export default function App() {
           {/* Bottom toolbar */}
           <Toolbar
             canUndo={canUndo}
+            canRedo={canRedo}
             waypointCount={state.waypoints.length}
             onUndo={() => dispatch({ type: 'UNDO' })}
+            onRedo={() => dispatch({ type: 'REDO' })}
             onPlay={enterPreview}
             onClear={() => dispatch({ type: 'CLEAR_ALL' })}
             onStylePicker={() => setShowStylePicker(true)}
@@ -127,10 +128,9 @@ export default function App() {
               segmentId={vehicleSelector.segmentId}
               current={vehicleSelector.vehicle}
               currentColor={vehicleSelector.color}
-              onSelect={(segmentId, vehicle, color, animation) => {
-                dispatch({ type: 'SET_VEHICLE', segmentId, vehicle });
-                dispatch({ type: 'SET_COLOR', segmentId, color });
-                dispatch({ type: 'SET_ANIMATION', segmentId, animation: animation ?? null });
+              onSelect={(segmentId, vehicle, color) => {
+                // Single atomic action → one undo entry per selector interaction
+                dispatch({ type: 'SET_VEHICLE', segmentId, vehicle, color });
               }}
               onClose={() => setVehicleSelector(null)}
             />
