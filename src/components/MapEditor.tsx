@@ -225,26 +225,31 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
 
         mapReadyRef.current = true;
         loadSucceeded = true;
+        if (watchdog) { clearTimeout(watchdog); watchdog = null; }
         requestAnimationFrame(() => { applySize(); map.resize(); });
       });
 
-      // Auto-retry on style load failure: same style up to 3×, then cycle through other styles
+      // Style-load watchdog: if the style hasn't reached 'load' after 10 s, retry
+      // the same style up to 3×, then rotate through the other styles. Individual
+      // tile/glyph 'error' events are deliberately NOT used as a trigger — they
+      // also fire for transient tile failures on styles that are loading fine,
+      // and restarting the style load on those made startup slow and could switch
+      // the user's map style for no reason.
       let loadSucceeded = false;
       let retries = 0;
       const styleIds = MAP_STYLES.map(s => s.id);
       let styleIdx = styleIds.indexOf(mapStyle);
-      map.on('error', () => {
-        if (loadSucceeded) return;
-        retries++;
-        if (retries <= 3) {
-          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(mapStyle)), retries * 1500);
-        } else {
-          // Rotate to the next available style
-          styleIdx = (styleIdx + 1) % styleIds.length;
-          const fallbackStyle = styleIds[styleIdx];
-          setTimeout(() => mapRef.current?.setStyle(getStyleUrl(fallbackStyle)), 2000);
-        }
-      });
+      let watchdog: ReturnType<typeof setTimeout> | null = null;
+      const armWatchdog = () => {
+        watchdog = setTimeout(() => {
+          if (loadSucceeded || !mapRef.current) return;
+          retries++;
+          if (retries > 3) styleIdx = (styleIdx + 1) % styleIds.length;
+          mapRef.current.setStyle(getStyleUrl(styleIds[styleIdx]));
+          armWatchdog();
+        }, 10_000);
+      };
+      armWatchdog();
 
       // Click on empty map → add new destination waypoint.
       // Use queryRenderedFeatures to guard against clicks on route segments —
@@ -268,6 +273,7 @@ export const MapEditor = forwardRef<MapEditorHandle, Props>(
       if (containerRef.current) ro.observe(containerRef.current);
 
       return () => {
+        if (watchdog) clearTimeout(watchdog);
         window.removeEventListener('resize', onResize);
         window.visualViewport?.removeEventListener('resize', onResize);
         ro.disconnect();
