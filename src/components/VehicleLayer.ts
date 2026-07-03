@@ -84,6 +84,14 @@ export class VehicleLayer {
   userTint: string | null = null;
   private currentTintedTex: THREE.CanvasTexture | null = null;
 
+  /** Called when a model fails to load, so the UI can surface the failure. */
+  onLoadError: ((url: string) => void) | null = null;
+
+  /** True while any visual (model, outgoing model, or train part) is in the scene. */
+  hasVisual(): boolean {
+    return this.model !== null || this.outgoing !== null || this.trainParts.length > 0;
+  }
+
   /** Returns true once every part has fully shrunk out. */
   isFullyDone(): boolean {
     const now = performance.now();
@@ -228,7 +236,10 @@ export class VehicleLayer {
         this.map?.triggerRepaint();
       },
       undefined,
-      (err) => console.warn('VehicleLayer: failed to load', url, err),
+      (err) => {
+        console.warn('VehicleLayer: failed to load', url, err);
+        this.onLoadError?.(url);
+      },
     );
   }
 
@@ -332,7 +343,10 @@ export class VehicleLayer {
       this.trainAnimStart = performance.now();
       this._applyTintToScene();
       this.map?.triggerRepaint();
-    }).catch(err => console.warn('VehicleLayer: failed to compose parts', err));
+    }).catch(err => {
+      console.warn('VehicleLayer: failed to compose parts', err);
+      this.onLoadError?.(urls[0]);
+    });
   }
 
   loadFBX(fbxUrl: string, animUrl: string | null, skinUrl: string | null, scaleFactor = 1, idleUrl: string | null = null) {
@@ -443,7 +457,10 @@ export class VehicleLayer {
       this.modelAnimStart = performance.now();
       this.scene.add(wrapper);
       this.map?.triggerRepaint();
-    }).catch(err => console.warn('VehicleLayer: failed to load FBX', fbxUrl, err));
+    }).catch(err => {
+      console.warn('VehicleLayer: failed to load FBX', fbxUrl, err);
+      this.onLoadError?.(fbxUrl);
+    });
   }
 
   /** Reset disappear-animation state so a replay starts with the model fully visible. */
